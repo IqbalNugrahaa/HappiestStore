@@ -2,21 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useLanguage } from "@/components/language-provider";
-import { DashboardHeader } from "@/components/dashboard-header";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransactionsTable } from "@/components/transactions-table";
 import { RevenueStats } from "@/components/revenue-stats";
 import { CSVUpload } from "@/components/csv-upload";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Upload } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Transaction {
   id: string;
@@ -272,100 +272,51 @@ export default function RevenuePage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <DashboardHeader
-        title={t("revenue")}
-        description="Track and manage your revenue transactions"
-        onLanguageToggle={toggleLanguage}
-        currentLanguage={language}
-      />
-      <div className="flex-1 p-6 space-y-6">
-        {showForm ? (
-          <TransactionForm
-            transaction={editingTransaction || undefined}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            isLoading={isSubmitting}
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div className="flex flex-col items-center rounded-2xl border border-white/20 bg-white/60 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5 lg:flex-row lg:justify-between">
+        <div className="text-center lg:text-left">
+          <h2 className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-2xl font-extrabold text-transparent">
+            {t("revenueManagement")}
+          </h2>
+          <p className="text-muted-foreground">
+            Track your revenue and transactions
+          </p>
+        </div>
+        <div className="mt-4 flex gap-2 lg:mt-0">
+          <Button
+            variant="outline"
+            className="border-indigo-200/60 hover:bg-indigo-50 dark:hover:bg-white/10"
+            onClick={() => setShowCSVUpload(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {t("csvUpload")}
+          </Button>
+          <Button
+            className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 text-white hover:opacity-90"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("addTransaction")}
+          </Button>
+        </div>
+      </div>
+
+      {/* STATS */}
+      <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
+        <CardContent className="p-4 sm:p-6">
+          <RevenueStats
+            transactions={transactions}
+            metrics={revMetrics ?? undefined}
+            isLoading={loadingRevenue}
           />
-        ) : showCSVUpload ? (
-          <CSVUpload
-            onUploadComplete={handleCSVUploadComplete}
-            onCancel={handleCancel}
-          />
-        ) : (
-          <>
-            <div className="flex flex-col lg:flex-row lg:justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold">{t("revenueManagement")}</h2>
-                <p className="text-muted-foreground">
-                  Track your revenue and transactions
-                </p>
-              </div>
-              <div className="flex gap-2 mt-4 lg:mt-0">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCSVUpload(true)}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {t("csvUpload")}
-                </Button>
-                <Button onClick={() => setShowForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t("addTransaction")}
-                </Button>
-              </div>
-            </div>
+        </CardContent>
+      </Card>
 
-            <div className="flex gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Month:</label>
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="1">January</SelectItem>
-                    <SelectItem value="2">February</SelectItem>
-                    <SelectItem value="3">March</SelectItem>
-                    <SelectItem value="4">April</SelectItem>
-                    <SelectItem value="5">May</SelectItem>
-                    <SelectItem value="6">June</SelectItem>
-                    <SelectItem value="7">July</SelectItem>
-                    <SelectItem value="8">August</SelectItem>
-                    <SelectItem value="9">September</SelectItem>
-                    <SelectItem value="10">October</SelectItem>
-                    <SelectItem value="11">November</SelectItem>
-                    <SelectItem value="12">December</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Year:</label>
-                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {availableYears.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* === Revenue cards sekarang memakai metrics dari /api/revenue === */}
-            <RevenueStats
-              transactions={transactions}
-              metrics={revMetrics ?? undefined}
-              isLoading={loadingRevenue}
-            />
-
+      {/* TABLE */}
+      <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <TransactionsTable
               serverMode
               transactions={transactions}
@@ -384,9 +335,58 @@ export default function RevenuePage() {
                 setPage(1);
               }}
             />
-          </>
-        )}
-      </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CSV Upload Modal */}
+      <Dialog open={showCSVUpload} onOpenChange={setShowCSVUpload}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+              CSV Upload
+            </DialogTitle>
+            <DialogDescription>
+              Unggah file CSV dan cocokkan item secara otomatis.
+            </DialogDescription>
+          </DialogHeader>
+
+          <CSVUpload
+            onUploadComplete={() => {
+              setShowCSVUpload(false);
+              // kalau perlu refresh data, panggil di sini
+              // refetchTransactions();
+            }}
+            onCancel={() => setShowCSVUpload(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Transaction Form Modal */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {editingTransaction ? t("editTransaction") : t("addTransaction")}
+            </DialogTitle>
+            <DialogDescription>
+              {editingTransaction
+                ? "Perbarui informasi transaksi"
+                : "Tambahkan transaksi baru"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <TransactionForm
+            transaction={editingTransaction || undefined}
+            onSubmit={async (payload) => {
+              await handleSubmit(payload);
+              setShowForm(false);
+            }}
+            onCancel={() => setShowForm(false)}
+            isLoading={isSubmitting}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

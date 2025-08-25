@@ -1,4 +1,3 @@
-// components/dashboard-sidebar.tsx
 "use client";
 
 import { cn } from "@/lib/utils";
@@ -29,9 +28,8 @@ interface DashboardSidebarProps {
   user: any;
   onLanguageToggle: () => void;
   currentLanguage: string;
-  // ⬇️ baru (controlled)
-  collapsed?: boolean;
-  onCollapsedChange?: (v: boolean) => void;
+  collapsed?: boolean; // controlled
+  onCollapsedChange?: (v: boolean) => void; // controlled
 }
 
 export function DashboardSidebar({
@@ -68,7 +66,7 @@ export function DashboardSidebar({
     <>
       {/* Floating hamburger (mobile only) */}
       <button
-        className="fixed top-3 left-3 z-[60] inline-flex items-center justify-center rounded-md border border-sidebar-border bg-sidebar p-2 shadow md:hidden"
+        className="fixed top-3 left-3 z-[60] inline-flex items-center justify-center rounded-md border border-white/20 bg-white/70 p-2 shadow backdrop-blur md:hidden dark:border-white/10 dark:bg-white/10"
         onClick={() => setMobileOpen(true)}
         aria-label="Open sidebar"
       >
@@ -87,15 +85,21 @@ export function DashboardSidebar({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-[55] flex h-full flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200",
+          // base
+          "fixed inset-y-0 left-0 z-[55] flex h-full flex-col transition-transform duration-200",
+          // glass + palette
+          "border-r border-white/10 bg-white/70 backdrop-blur-md ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10",
+          // mobile
           mobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
+          // desktop
           "md:translate-x-0",
           desktopWidth
         )}
       >
         {/* Header */}
         <Link href={"/dashboard"}>
-          <div className="flex h-16 items-center border-b border-sidebar-border px-3 md:px-4">
+          <div className="relative flex h-16 items-center px-3 md:px-4">
+            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-indigo-500/30 via-blue-500/30 to-purple-500/30" />
             <Image
               src={logo}
               alt="Logo"
@@ -105,7 +109,7 @@ export function DashboardSidebar({
             />
             <h1
               className={cn(
-                "text-base font-semibold text-sidebar-foreground transition-opacity",
+                "text-base font-semibold text-foreground transition-opacity",
                 collapsed ? "opacity-0 md:opacity-0 w-0" : "opacity-100"
               )}
             >
@@ -133,21 +137,31 @@ export function DashboardSidebar({
 
         {/* Navigation */}
         <ScrollArea className="flex-1 px-2 py-4">
-          <nav className="space-y-2">
+          <nav className="flex flex-col gap-y-2">
             {navigation.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <Link key={item.name} href={item.href}>
                   <Button
-                    variant={isActive ? "secondary" : "ghost"}
+                    variant="ghost"
                     className={cn(
-                      "w-full gap-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      "relative w-full gap-3 hover:bg-white/60 hover:text-foreground dark:hover:bg-white/10",
+                      collapsed ? "justify-center px-0" : "justify-start",
                       isActive &&
-                        "bg-sidebar-accent text-sidebar-accent-foreground",
-                      collapsed ? "justify-center px-0" : "justify-start"
+                        "bg-white/70 text-foreground ring-1 ring-indigo-500/30 dark:bg-white/10 dark:ring-indigo-400/30"
                     )}
                   >
-                    <item.icon className="h-4 w-4 shrink-0" />
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-gradient-to-b from-indigo-500 via-blue-500 to-purple-500" />
+                    )}
+                    <item.icon
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        isActive
+                          ? "text-indigo-600 dark:text-indigo-300"
+                          : "text-muted-foreground"
+                      )}
+                    />
                     {!collapsed && (
                       <span className="truncate">{item.name}</span>
                     )}
@@ -159,21 +173,21 @@ export function DashboardSidebar({
         </ScrollArea>
 
         {/* User section */}
-        <div className="border-t border-sidebar-border p-3 space-y-2">
+        <div className="border-t border-white/10 p-3 space-y-2 dark:border-white/10">
           <div
             className={cn(
               "flex items-center gap-3",
               collapsed ? "justify-center" : "px-1"
             )}
           >
-            <div className="h-8 w-8 rounded-full bg-sidebar-primary flex items-center justify-center">
-              <span className="text-xs font-medium text-sidebar-primary-foreground">
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white ring-1 ring-white/60 dark:ring-white/10">
+              <span className="text-xs font-semibold">
                 {user?.email?.charAt(0).toUpperCase()}
               </span>
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-sidebar-foreground">
+                <p className="truncate text-sm font-medium text-foreground">
                   {user?.email}
                 </p>
               </div>
@@ -186,8 +200,8 @@ export function DashboardSidebar({
               size={collapsed ? "icon" : "sm"}
               onClick={onLanguageToggle}
               className={cn(
-                "text-sidebar-foreground hover:bg-sidebar-accent",
-                collapsed ? "w-9 h-9" : "flex-1"
+                "text-foreground hover:bg-white/60 dark:hover:bg-white/10",
+                collapsed ? "h-9 w-9" : "flex-1"
               )}
               title="Toggle language"
             >
@@ -201,8 +215,8 @@ export function DashboardSidebar({
                 variant="ghost"
                 size={collapsed ? "icon" : "sm"}
                 className={cn(
-                  "text-sidebar-foreground hover:bg-sidebar-accent w-full",
-                  collapsed ? "w-9 h-9" : ""
+                  "w-full text-foreground hover:bg-white/60 dark:hover:bg-white/10",
+                  collapsed ? "h-9 w-9" : ""
                 )}
                 title="Sign Out"
               >

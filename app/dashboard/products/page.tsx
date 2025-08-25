@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Upload } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Product {
   id?: string;
@@ -202,49 +210,42 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <DashboardHeader
-        title={t("products")}
-        description="Manage your product catalog"
-        onLanguageToggle={toggleLanguage}
-        currentLanguage={language}
-      />
-      <div className="flex-1 p-6 space-y-6">
-        {showForm ? (
-          <ProductForm
-            product={editingProduct || undefined}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            isLoading={isSubmitting}
-          />
-        ) : (
-          <>
-            <div className="flex flex-col lg:flex-row lg:justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold">{t("productManagement")}</h2>
-                <p className="text-muted-foreground">
-                  Add and manage your products
-                </p>
-              </div>
-              <Button
-                onClick={() => setShowForm(true)}
-                className="mt-4 lg:mt-0"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                {t("addProduct")}
-              </Button>
-            </div>
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div className="flex flex-col items-center rounded-2xl border border-white/20 bg-white/60 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5 lg:flex-row lg:justify-between">
+        <div className="text-center lg:text-left">
+          <h2 className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-2xl font-extrabold text-transparent">
+            {t("productManagement")}
+          </h2>
+          <p className="text-muted-foreground">Add and manage your products</p>
+        </div>
+        <div className="mt-4 lg:mt-0">
+          <Button
+            className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 text-white hover:opacity-90"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("addProduct")}
+          </Button>
+        </div>
+      </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
-                <TabsTrigger value="manage">Manage Products</TabsTrigger>
-                <TabsTrigger value="bulk-upload">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Bulk Upload
-                </TabsTrigger>
-              </TabsList>
+      {/* TABS */}
+      <Tabs defaultValue="manage" className="space-y-4">
+        <TabsList className="w-full justify-start overflow-x-auto no-scrollbar bg-white/70 backdrop-blur dark:bg-white/10">
+          <TabsTrigger value="manage" className="shrink-0">
+            Manage Products
+          </TabsTrigger>
+          <TabsTrigger value="bulk" className="shrink-0">
+            <Upload className="mr-2 h-4 w-4" />
+            Bulk Upload
+          </TabsTrigger>
+        </TabsList>
 
-              <TabsContent value="manage">
+        <TabsContent value="manage" className="space-y-4">
+          <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
                 <ProductsTable
                   serverMode
                   products={products}
@@ -275,17 +276,44 @@ export default function ProductsPage() {
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                 />
-              </TabsContent>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              <TabsContent value="bulk-upload">
-                <ProductBulkUpload
-                  onUploadComplete={handleBulkUploadComplete}
-                />
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
-      </div>
+        <TabsContent value="bulk" className="space-y-4">
+          <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
+            <CardContent className="p-4">
+              <ProductBulkUpload onUploadComplete={handleBulkUploadComplete} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* TODO: Modal Add Product */}
+      {showForm && (
+        <Dialog open={showForm} onOpenChange={setShowForm}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {editingProduct ? t("editProduct") : t("addProduct")}
+              </DialogTitle>
+              <DialogDescription>
+                {editingProduct
+                  ? "Update product information"
+                  : "Add a new product to your catalog"}
+              </DialogDescription>
+            </DialogHeader>
+
+            <ProductForm
+              product={editingProduct || undefined}
+              onSubmit={handleSubmit}
+              onCancel={() => setShowForm(false)}
+              isLoading={isSubmitting}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
