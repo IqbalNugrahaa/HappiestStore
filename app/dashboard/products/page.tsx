@@ -219,14 +219,17 @@ export default function ProductsPage() {
           />
         ) : (
           <>
-            <div className="flex justify-between items-center">
+            <div className="flex-col lg:flex-row lg:justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">{t("productManagement")}</h2>
                 <p className="text-muted-foreground">
                   Add and manage your products
                 </p>
               </div>
-              <Button onClick={() => setShowForm(true)}>
+              <Button
+                onClick={() => setShowForm(true)}
+                className="mt-4 lg:mt-0"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 {t("addProduct")}
               </Button>

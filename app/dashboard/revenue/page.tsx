@@ -294,14 +294,14 @@ export default function RevenuePage() {
           />
         ) : (
           <>
-            <div className="flex justify-between items-center">
+            <div className="flex-col lg:flex-row lg:justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">{t("revenueManagement")}</h2>
                 <p className="text-muted-foreground">
                   Track your revenue and transactions
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4 lg:mt-0">
                 <Button
                   variant="outline"
                   onClick={() => setShowCSVUpload(true)}
