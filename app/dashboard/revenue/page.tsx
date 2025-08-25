@@ -294,7 +294,7 @@ export default function RevenuePage() {
           />
         ) : (
           <>
-            <div className="flex-col lg:flex-row lg:justify-between items-center">
+            <div className="flex flex-col lg:flex-row lg:justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">{t("revenueManagement")}</h2>
                 <p className="text-muted-foreground">

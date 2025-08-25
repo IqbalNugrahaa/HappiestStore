@@ -219,7 +219,7 @@ export default function ProductsPage() {
           />
         ) : (
           <>
-            <div className="flex-col lg:flex-row lg:justify-between items-center">
+            <div className="flex flex-col lg:flex-row lg:justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">{t("productManagement")}</h2>
                 <p className="text-muted-foreground">
