@@ -293,7 +293,7 @@ export default function ProductsPage() {
       {/* TODO: Modal Add Product */}
       {showForm && (
         <Dialog open={showForm} onOpenChange={setShowForm}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingProduct ? t("editProduct") : t("addProduct")}

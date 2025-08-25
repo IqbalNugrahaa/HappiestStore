@@ -364,7 +364,7 @@ export default function RevenuePage() {
 
       {/* Transaction Form Modal */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
               {editingTransaction ? t("editTransaction") : t("addTransaction")}
