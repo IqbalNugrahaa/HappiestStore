@@ -1,57 +1,57 @@
-"use server"
+"use server";
 
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 export async function signIn(prevState: any, formData: FormData) {
   // Check if formData is valid
   if (!formData) {
-    return { error: "Form data is missing" }
+    return { error: "Form data is missing" };
   }
 
-  const email = formData.get("email")
-  const password = formData.get("password")
+  const email = formData.get("email");
+  const password = formData.get("password");
 
   // Validate required fields
   if (!email || !password) {
-    return { error: "Email and password are required" }
+    return { error: "Email and password are required" };
   }
 
-  const supabase = createClient()
+  const supabase = await createClient();
 
   try {
     const { error } = await supabase.auth.signInWithPassword({
       email: email.toString(),
       password: password.toString(),
-    })
+    });
 
     if (error) {
-      return { error: error.message }
+      return { error: error.message };
     }
 
     // Return success instead of redirecting directly
-    return { success: true }
+    return { success: true };
   } catch (error) {
-    console.error("Login error:", error)
-    return { error: "An unexpected error occurred. Please try again." }
+    console.error("Login error:", error);
+    return { error: "An unexpected error occurred. Please try again." };
   }
 }
 
 export async function signUp(prevState: any, formData: FormData) {
   // Check if formData is valid
   if (!formData) {
-    return { error: "Form data is missing" }
+    return { error: "Form data is missing" };
   }
 
-  const email = formData.get("email")
-  const password = formData.get("password")
+  const email = formData.get("email");
+  const password = formData.get("password");
 
   // Validate required fields
   if (!email || !password) {
-    return { error: "Email and password are required" }
+    return { error: "Email and password are required" };
   }
 
-  const supabase = createClient()
+  const supabase = await createClient();
 
   try {
     const { error } = await supabase.auth.signUp({
@@ -59,23 +59,24 @@ export async function signUp(prevState: any, formData: FormData) {
       password: password.toString(),
       options: {
         emailRedirectTo:
-          process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${process.env.NEXT_PUBLIC_SUPABASE_URL}/dashboard`,
+          process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/dashboard`,
       },
-    })
+    });
 
     if (error) {
-      return { error: error.message }
+      return { error: error.message };
     }
 
-    return { success: "Check your email to confirm your account." }
+    return { success: "Check your email to confirm your account." };
   } catch (error) {
-    console.error("Sign up error:", error)
-    return { error: "An unexpected error occurred. Please try again." }
+    console.error("Sign up error:", error);
+    return { error: "An unexpected error occurred. Please try again." };
   }
 }
 
 export async function signOut() {
-  const supabase = createClient()
-  await supabase.auth.signOut()
-  redirect("/auth/login")
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/auth/login");
 }
