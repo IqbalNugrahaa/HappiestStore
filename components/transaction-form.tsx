@@ -90,10 +90,8 @@ function todayDateOnly(): string {
 function dateOnlyFromAny(input?: string): string {
   const s = (input || "").trim();
   if (!s) return todayDateOnly();
-  // Jika sudah "YYYY-MM-DD", pakai apa adanya
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  // Jika ISO/timestamp lain, baca komponen LOKAL (bukan UTC ISO)
   const d = new Date(s);
   if (isNaN(d.getTime())) return todayDateOnly();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -102,13 +100,14 @@ function dateOnlyFromAny(input?: string): string {
 function ymFromDateOnly(dateOnly: string): { year: number; month: number } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
   if (m) return { year: Number(m[1]), month: Number(m[2]) };
-  // fallback lokal
   const d = new Date(dateOnly);
-  return {
-    year: d.getFullYear(),
-    month: d.getMonth() + 1,
-  };
+  return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
+
+/** Helper untuk hitung revenue secara konsisten */
+const toNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+const computeRevenue = (selling: any, purchase: any) =>
+  toNum(selling) - toNum(purchase);
 
 export function TransactionForm({
   transaction,
@@ -126,13 +125,13 @@ export function TransactionForm({
   const cacheRef = useRef<Map<string, Product[]>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
 
-  const initialDate = dateOnlyFromAny(transaction?.date); // ← aman dari GMT
+  const initialDate = dateOnlyFromAny(transaction?.date);
   const { year: initYear, month: initMonth } = ymFromDateOnly(initialDate);
 
   const [formData, setFormData] = useState({
     id_product: transaction?.id_product ?? null,
     is_custom_item: false,
-    date: initialDate, // ← YYYY-MM-DD murni
+    date: initialDate,
     item_purchased: transaction?.item_purchased || "",
     customer_name: transaction?.customer_name || "",
     store_name: transaction?.store_name || "",
@@ -141,15 +140,15 @@ export function TransactionForm({
     selling_price: transaction?.selling_price || 0,
     revenue: transaction?.revenue || 0,
     notes: transaction?.notes || "",
-    month: transaction?.month ?? initMonth, // ← dari YYYY-MM-DD
-    year: transaction?.year ?? initYear, // ← dari YYYY-MM-DD
+    month: transaction?.month ?? initMonth,
+    year: transaction?.year ?? initYear,
     created_at: transaction?.created_at || new Date().toISOString(),
     updated_at: transaction?.updated_at || new Date().toISOString(),
   });
 
   const priceValid = formData.is_custom_item
-    ? formData.selling_price >= 0 // custom boleh 0
-    : formData.selling_price > 0; // non-custom tetap > 0
+    ? formData.selling_price >= 0
+    : formData.selling_price > 0;
 
   const hasItem = formData.is_custom_item
     ? formData.item_purchased.trim().length > 0
@@ -157,33 +156,35 @@ export function TransactionForm({
 
   const canSubmit = !isLoading && priceValid && hasItem;
 
-  // Load products (expects /api/products => [{ id, name, price }, ...])
+  // Debounce pencarian produk (opsional)
+  useEffect(() => {
+    const h = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(h);
+  }, [search]);
+
+  // Load products
   useEffect(() => {
     let mounted = true;
 
     async function fetchAllProducts(q: string) {
       try {
-        // cache dulu supaya ketikan cepat tidak selalu network
         if (cacheRef.current.has(q)) {
           if (mounted) setProducts(cacheRef.current.get(q) || []);
           return;
         }
 
         setProductsLoading(true);
-
-        // batalkan request sebelumnya
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
 
-        // --- 1) Coba jalur cepat: all=1 (server return semua data)
         const fastUrl = q
           ? `/api/products?all=1&search=${encodeURIComponent(q)}`
           : `/api/products?all=1`;
 
         let res = await fetch(fastUrl, {
           signal: controller.signal,
-          credentials: "same-origin", // penting agar cookie sesi ikut (RLS)
+          credentials: "same-origin",
           headers: { Accept: "application/json" },
         });
 
@@ -192,7 +193,6 @@ export function TransactionForm({
           const json = await res.json();
           items = json?.products ?? [];
         } else {
-          // --- 2) Fallback: loop pagination sampai habis
           items = [];
           const pageSize = 1000;
           for (let page = 1; ; page++) {
@@ -212,8 +212,6 @@ export function TransactionForm({
 
             const { products = [] } = await res.json();
             items.push(...products);
-
-            // berhenti kalau sudah kurang dari pageSize
             if (products.length < pageSize) break;
           }
         }
@@ -255,15 +253,13 @@ export function TransactionForm({
     e.preventDefault();
 
     if (formData.is_custom_item) {
-      // custom: wajib nama item; harga boleh 0 atau lebih
       if (!formData.item_purchased.trim()) return;
       if (
         !Number.isFinite(formData.selling_price) ||
         formData.selling_price < 0
       )
-        return; // kalau mau tetap larang negatif
+        return;
     } else {
-      // non-custom: wajib pilih produk, harga harus > 0
       if (!formData.id_product) return;
       if (
         !Number.isFinite(formData.selling_price) ||
@@ -271,6 +267,12 @@ export function TransactionForm({
       )
         return;
     }
+
+    // Pastikan revenue konsisten saat submit
+    const finalRevenue = computeRevenue(
+      formData.selling_price,
+      formData.purchase_price
+    );
 
     const payload = {
       id_product: formData.is_custom_item
@@ -282,9 +284,9 @@ export function TransactionForm({
       customer_name: formData.customer_name.trim() || undefined,
       store_name: formData.store_name || undefined,
       payment_method: formData.payment_method || undefined,
-      purchase_price: formData.purchase_price || 0,
-      selling_price: formData.selling_price,
-      revenue: formData.revenue || 0,
+      purchase_price: toNum(formData.purchase_price),
+      selling_price: toNum(formData.selling_price),
+      revenue: finalRevenue,
       notes: formData.notes.trim() || undefined,
       month: formData.month,
       year: formData.year,
@@ -373,13 +375,21 @@ export function TransactionForm({
                             key={p.id}
                             value={`${p.name} ${p.price}`}
                             onSelect={() => {
-                              setFormData((prev) => ({
-                                ...prev,
-                                is_custom_item: false,
-                                id_product: p.id,
-                                item_purchased: p.name,
-                                selling_price: Number(p.price) || 0, // ← selalu override
-                              }));
+                              setFormData((prev) => {
+                                const newSelling = toNum(p.price);
+                                const newRevenue = computeRevenue(
+                                  newSelling,
+                                  prev.purchase_price
+                                );
+                                return {
+                                  ...prev,
+                                  is_custom_item: false,
+                                  id_product: p.id,
+                                  item_purchased: p.name,
+                                  selling_price: newSelling, // override harga dari produk
+                                  revenue: newRevenue, // ← hitung ulang revenue
+                                };
+                              });
                               setProductOpen(false);
                             }}
                           >
@@ -405,9 +415,12 @@ export function TransactionForm({
                             ...prev,
                             is_custom_item: true,
                             id_product: null,
-                            // pertahankan item_purchase/selling_price jika sudah ada; jika belum, kosongkan/0
                             item_purchased: prev.item_purchased || "",
-                            selling_price: prev.selling_price || 0,
+                            selling_price: toNum(prev.selling_price),
+                            revenue: computeRevenue(
+                              prev.selling_price,
+                              prev.purchase_price
+                            ), // jaga konsistensi
                           }));
                           setProductOpen(false);
                         }}
@@ -513,11 +526,11 @@ export function TransactionForm({
               <CurrencyInput
                 value={formData.purchase_price}
                 onChange={(price) =>
-                  setFormData({
-                    ...formData,
-                    purchase_price: price,
-                    revenue: formData.selling_price - price, // update revenue when purchase price changes
-                  })
+                  setFormData((prev) => ({
+                    ...prev,
+                    purchase_price: toNum(price),
+                    revenue: computeRevenue(prev.selling_price, price), // ← hitung ulang saat purchase price berubah
+                  }))
                 }
                 placeholder="Enter purchase price"
                 disabled={isLoading}
@@ -529,7 +542,11 @@ export function TransactionForm({
               <CurrencyInput
                 value={formData.selling_price}
                 onChange={(price) =>
-                  setFormData({ ...formData, selling_price: price })
+                  setFormData((prev) => ({
+                    ...prev,
+                    selling_price: toNum(price),
+                    revenue: computeRevenue(price, prev.purchase_price), // ← hitung ulang saat selling price berubah
+                  }))
                 }
                 placeholder={
                   formData.is_custom_item
@@ -543,8 +560,11 @@ export function TransactionForm({
             <div className="space-y-2">
               <Label htmlFor="revenue">Revenue</Label>
               <CurrencyInput
-                value={formData.revenue}
-                onChange={(revenue) => setFormData({ ...formData, revenue })}
+                value={computeRevenue(
+                  formData.selling_price,
+                  formData.purchase_price
+                )} // selalu sinkron
+                onChange={() => {}}
                 placeholder="Calculated revenue"
                 disabled={true}
               />
