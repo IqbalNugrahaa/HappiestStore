@@ -1,15 +1,17 @@
+// components/revenue-stats.tsx
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRupiah } from "@/lib/currency";
 import { TrendingUp, TrendingDown, DollarSign, CreditCard } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 
-/** === Types dari data transaksi (untuk fallback perhitungan di client) === */
+/** ===== Types ===== */
 interface Transaction {
   id: string;
-  date: string; // ISO-like "YYYY-MM-DD" atau valid Date string
+  date: string;
   item_purchased: string;
   customer_name?: string;
   store_name?: string;
@@ -24,45 +26,58 @@ interface Transaction {
   updated_at: string;
 }
 
-/** === Bentuk respons dari /api/revenue (server metrics) === */
 export type RevenueApiData = {
+  rows?: Array<{
+    date: string;
+    total_revenue: number | null;
+    bca: number | null;
+    dana: number | null;
+    spay: number | null;
+    qris: number | null;
+    average_revenue: number | null;
+  }>;
   totals: {
     totalRevenue: number;
     thisMonthRevenue: number;
     prevMonthRevenue: number;
+    yesterdayRevenueThisMonth?: number;
   };
   averages?: {
-    /** rata-rata pendapatan harian bulan ini (server) */
     thisMonthAverageRevenue: number;
-    /** rata-rata pendapatan harian bulan lalu (server) */
     prevMonthAverageRevenue: number;
   };
-  byMethodAllTime?: {
-    BCA: number;
-    DANA: number;
-    SPAY: number;
-    QRIS: number;
-  };
-  byMethodThisMonth?: {
-    BCA: number;
-    DANA: number;
-    SPAY: number;
-    QRIS: number;
-  };
+  byMethodAllTime?: { BCA: number; DANA: number; SPAY: number; QRIS: number };
+  byMethodThisMonth?: { BCA: number; DANA: number; SPAY: number; QRIS: number };
+  yesterdayByMethod?: { BCA: number; DANA: number; SPAY: number; QRIS: number };
+  month?: number;
+  year?: number;
 };
 
 interface RevenueStatsProps {
-  /** daftar transaksi (opsional; dipakai untuk fallback perhitungan) */
   transactions?: Transaction[];
-  /** metrics dari /api/revenue */
   metrics?: RevenueApiData;
-  /** tampilkan skeleton saat loading */
   isLoading?: boolean;
 }
 
-/* =======================
-   Kartu metode terpisah
-   ======================= */
+/** ===== Helper global: YMD “kemarin” Asia/Jakarta ===== */
+function yesterdayJakartaYMD() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  const d = Number(parts.find((p) => p.type === "day")?.value);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+/** ===== Card metode ===== */
 type MethodCardProps = {
   title: "BCA" | "DANA" | "SPAY" | "QRIS";
   amount?: number;
@@ -94,9 +109,7 @@ export const QrisCard = ({ amount = 0 }: { amount?: number }) => (
   <MethodCard title="QRIS" amount={amount} />
 );
 
-/* =======================
-   Komponen utama
-   ======================= */
+/** ===== Komponen utama ===== */
 export function RevenueStats({
   transactions = [],
   metrics,
@@ -104,7 +117,6 @@ export function RevenueStats({
 }: RevenueStatsProps) {
   const { t } = useLanguage();
 
-  /* ---------- Skeleton ---------- */
   const StatCardSkeleton = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -118,23 +130,6 @@ export function RevenueStats({
     </Card>
   );
 
-  if (isLoading) {
-    return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" aria-busy>
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-      </div>
-    );
-  }
-  /* ---------- End Skeleton ---------- */
-
-  /* ---------- Fallback helpers dari transaksi ---------- */
   const getTxRevenue = (t: Transaction) =>
     Number(
       t.revenue ?? Number(t.selling_price ?? 0) - Number(t.purchase_price ?? 0)
@@ -157,7 +152,7 @@ export function RevenueStats({
     return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
   });
 
-  /* ---------- Total & This Month (server-first, fallback client) ---------- */
+  // ---- Totals (server-first, fallback client) ----
   const totalRevenue =
     metrics?.totals?.totalRevenue ??
     transactions.reduce((sum, t) => sum + getTxRevenue(t), 0);
@@ -176,30 +171,44 @@ export function RevenueStats({
       : 0;
   const isPositiveGrowth = growth >= 0;
 
-  /* ---------- Avg Transaction Value (hitung dari transaksi) ---------- */
   const totalTx = transactions.length;
-  const avgTransactionValue = totalTx > 0 ? totalRevenue / totalTx : 0;
 
-  /* ---------- Average Revenue (This Month) ---------- */
-  // Server value (jika tersedia), fallback: revenue bulan ini / jumlah hari unik pada bulan ini
-  const avgThisMonthServer = metrics?.averages?.thisMonthAverageRevenue;
-  const uniqueDaysThisMonth = new Set(
-    currentMonthTransactions.map((t) => new Date(t.date).toDateString())
-  ).size;
-  const avgThisMonthFallback =
-    uniqueDaysThisMonth > 0
-      ? Math.round(thisMonthRevenue / uniqueDaysThisMonth)
-      : 0;
-  const avgThisMonth = avgThisMonthServer ?? avgThisMonthFallback;
+  // ---- Yesterday Revenue (This Month) ----
+  const yesterdayRevenue = useMemo(() => {
+    // 1) gunakan nilai backend kalau ada
+    if (typeof metrics?.totals?.yesterdayRevenueThisMonth === "number") {
+      return metrics.totals.yesterdayRevenueThisMonth;
+    }
+    // 2) fallback dari rows (jika dikirim)
+    const rows: any[] = (metrics as any)?.rows ?? [];
+    const ymd = yesterdayJakartaYMD();
+    if (rows.length) {
+      return rows
+        .filter((r) => r?.date === ymd)
+        .reduce(
+          (sum, r) =>
+            sum +
+            (Number(r?.total_revenue) ||
+              Number(r?.bca || 0) +
+                Number(r?.dana || 0) +
+                Number(r?.spay || 0) +
+                Number(r?.qris || 0)),
+          0
+        );
+    }
+    // 3) fallback terakhir dari daftar transaksi (jika ada)
+    return transactions
+      .filter((t) => String(t.date).slice(0, 10) === ymd)
+      .reduce((sum, t) => sum + getTxRevenue(t), 0);
+  }, [metrics, transactions]);
 
-  /* ---------- Per metode (This Month) ---------- */
+  // ---- Per metode (This Month) ----
   const tm = metrics?.byMethodThisMonth;
   let thisMonthBCA = tm?.BCA ?? 0;
   let thisMonthDANA = tm?.DANA ?? 0;
   let thisMonthSPAY = tm?.SPAY ?? 0;
   let thisMonthQRIS = tm?.QRIS ?? 0;
 
-  // Fallback hitung dari transaksi jika metrics belum ada
   if (!tm) {
     const acc = { BCA: 0, DANA: 0, SPAY: 0, QRIS: 0 } as Record<
       "BCA" | "DANA" | "SPAY" | "QRIS",
@@ -219,105 +228,119 @@ export function RevenueStats({
     thisMonthQRIS = acc.QRIS;
   }
 
-  /* ---------- Render ---------- */
   return (
     <div className="grid gap-4">
-      {/* Ringkasan utama */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Total Revenue */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("totalRevenue")}
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatRupiah(totalRevenue)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t("allTimeRevenue")}
-            </p>
-          </CardContent>
-        </Card>
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" aria-busy>
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+      ) : (
+        <>
+          {/* Ringkasan utama */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {/* Total Revenue */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {t("totalRevenue") ?? "Total Revenue"}
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatRupiah(totalRevenue)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("allTimeRevenue") ?? "All time"}
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* This Month Revenue */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("thisMonth")}
-            </CardTitle>
-            {isPositiveGrowth ? (
-              <TrendingUp className="h-4 w-4 text-green-600" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-600" />
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatRupiah(thisMonthRevenue)}
-            </div>
-            <p
-              className={`text-xs ${
-                isPositiveGrowth ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {t(isPositiveGrowth ? "positiveGrowth" : "negativeGrowth", {
-                percent: Math.abs(growth).toFixed(1),
-              })}
-            </p>
-          </CardContent>
-        </Card>
+            {/* This Month Revenue */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {t("thisMonth") ?? "This Month"}
+                </CardTitle>
+                {isPositiveGrowth ? (
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatRupiah(thisMonthRevenue)}
+                </div>
+                <p
+                  className={`text-xs ${
+                    isPositiveGrowth ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {(t(isPositiveGrowth ? "positiveGrowth" : "negativeGrowth", {
+                    percent: Math.abs(growth).toFixed(1),
+                  }) as string) || `${Math.abs(growth).toFixed(1)}%`}
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* Transactions count */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("transactions")}
-            </CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {totalTx > 0 ? totalTx : "-"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {totalTx > 0
-                ? `${currentMonthTransactions.length} ${t(
-                    "thisMonth"
-                  ).toLowerCase()}`
-                : t("allTimeRevenue")}
-            </p>
-          </CardContent>
-        </Card>
+            {/* Transactions count */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {t("transactions") ?? "Transactions"}
+                </CardTitle>
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {totalTx > 0 ? totalTx : "-"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {totalTx > 0
+                    ? `${currentMonthTransactions.length} ${
+                        (t("thisMonth") as string) || "this month"
+                      }`
+                    : t("allTimeRevenue") ?? "All time"}
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* Avg transaction value (berdasarkan transaksi) */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Avg Revenue (This Month)
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatRupiah(avgThisMonth)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Rata-rata pendapatan harian bulan ini
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+            {/* Yesterday Revenue */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Yesterday Revenue
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatRupiah(yesterdayRevenue)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Pendapatan hari kemarin (bulan ini)
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Kartu metode per-komponen (This Month) */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <BcaCard amount={thisMonthBCA} />
-        <DanaCard amount={thisMonthDANA} />
-        <SpayCard amount={thisMonthSPAY} />
-        <QrisCard amount={thisMonthQRIS} />
-      </div>
+          {/* Per metode (This Month) */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <BcaCard amount={thisMonthBCA} />
+            <DanaCard amount={thisMonthDANA} />
+            <SpayCard amount={thisMonthSPAY} />
+            <QrisCard amount={thisMonthQRIS} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

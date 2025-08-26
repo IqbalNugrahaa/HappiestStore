@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,17 +64,14 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
   const [errors, setErrors] = useState<string[]>([]);
   const [products, setProducts] = useState<ProductMatch[]>([]);
 
-  // OPTIONAL: preload products once (agar fuzzy match siap bahkan sebelum upload)
   useEffect(() => {
     void fetchProducts();
   }, []);
 
-  // Fetch products for fuzzy matching
   const fetchProducts = async () => {
     try {
-      // coba jalur cepat: API mendukung all=1
       const res = await fetch("/api/products?all=1", {
-        credentials: "same-origin", // penting utk RLS
+        credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -83,8 +79,6 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
         await res.json();
 
       let items: ProductApiRow[] = json.products ?? [];
-
-      // fallback: kalau server masih paginate, ambil per halaman sampai habis
       if (!items.length && (json.total ?? 0) > 0) {
         const pageSize = 1000;
         items = [];
@@ -117,7 +111,6 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
     }
   };
 
-  // Handle file drop
   const handleDrop = useCallback(
     async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -128,7 +121,7 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
         (file) =>
           file.type === "text/csv" ||
           file.name.toLowerCase().endsWith(".csv") ||
-          file.type === "text/plain" // beberapa OS set ke text/plain
+          file.type === "text/plain"
       );
 
       if (!csvFile) {
@@ -145,21 +138,16 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
     [t, toast]
   );
 
-  // Handle file input
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      await processFile(file);
-    }
+    if (file) await processFile(file);
   };
 
-  // Process CSV file
   const processFile = async (file: File) => {
     setIsProcessing(true);
     setErrors([]);
 
     try {
-      // kalau preload belum selesai, tunggu sekali
       if (products.length === 0) {
         await fetchProducts();
       }
@@ -195,7 +183,6 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
     }
   };
 
-  // Toggle row selection
   const toggleRowSelection = (id: string) => {
     setCsvData((prev) =>
       prev.map((row) =>
@@ -204,7 +191,6 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
     );
   };
 
-  // Toggle all selections
   const toggleAllSelections = () => {
     const allSelected = csvData.every((row) => row.selected);
     setCsvData((prev) =>
@@ -212,7 +198,6 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
     );
   };
 
-  // Upload selected transactions
   const handleUpload = async () => {
     const selectedRows = csvData.filter((row) => row.selected);
 
@@ -244,7 +229,7 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
           purchase_price: purchasePrice,
           selling_price: sellingPrice,
           product_id: matchedProduct ? matchedProduct.id : null,
-          revenue: revenue,
+          revenue,
           notes: row.notes,
           month: transactionDate.getMonth() + 1,
           year: transactionDate.getFullYear(),
@@ -281,8 +266,7 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
   };
 
   const downloadTemplate = () => {
-    // NOTE: gunakan angka polos (tanpa format rupiah) & kutip field teks
-    const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+    const today = new Date().toISOString().slice(0, 10);
     const template = `Date,Item Purchase,Customer Name,Store Name,Payment Method,Purchase,Notes
 ${today},"Wireless Headphones","John Smith","Tech Store Downtown","Credit Card",1125000,"Customer was very satisfied"
 ${today},"Coffee Mug","Sarah Johnson","Home Goods Plus","Cash",127500,"Part of a bulk order"`;
@@ -304,9 +288,9 @@ ${today},"Coffee Mug","Sarah Johnson","Home Goods Plus","Cash",127500,"Part of a
     .reduce((sum, row) => sum + row.purchasePrice, 0);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
+    <div className="min-h-[80vh] w-full px-3 sm:px-6 py-4">
+      <Card className="max-w-[1200px] mx-auto">
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
             {t("csvUpload")}
@@ -315,7 +299,8 @@ ${today},"Coffee Mug","Sarah Johnson","Home Goods Plus","Cash",127500,"Part of a
             {t("bulkUpload")} transactions from CSV file
           </CardDescription>
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="pt-0">
           {csvData.length === 0 ? (
             <div className="space-y-4">
               <div className="flex justify-end">
@@ -387,9 +372,10 @@ ${today},"Coffee Mug","Sarah Johnson","Home Goods Plus","Cash",127500,"Part of a
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+            <div className="space-y-3">
+              {/* Toolbar sticky */}
+              <div className="sticky -top-4 z-10 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60 border rounded-md px-3 sm:px-4 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3">
                   <Badge variant="secondary">
                     {selectedCount} of {csvData.length} selected
                   </Badge>
@@ -397,13 +383,18 @@ ${today},"Coffee Mug","Sarah Johnson","Home Goods Plus","Cash",127500,"Part of a
                     Total: {formatRupiah(totalAmount)}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={onCancel}>
+                <div className="flex flex-col lg:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={onCancel}
+                    className="w-full md:w-auto"
+                  >
                     {t("cancel")}
                   </Button>
                   <Button
                     onClick={handleUpload}
                     disabled={isUploading || selectedCount === 0}
+                    className="w-full md:w-auto"
                   >
                     {isUploading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -413,79 +404,202 @@ ${today},"Coffee Mug","Sarah Johnson","Home Goods Plus","Cash",127500,"Part of a
                 </div>
               </div>
 
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={csvData.every((row) => row.selected)}
-                          onCheckedChange={toggleAllSelections}
-                        />
-                      </TableHead>
-                      <TableHead>Item</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Store</TableHead>
-                      <TableHead>Payment</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead>Match</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">
-                        Selling Price
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {csvData.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>
+              <div className="hidden md:block rounded-md border w-full overflow-hidden">
+                {/* viewport: scroll Y & X di dalam dialog */}
+                <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
+                  <Table className="w-max min-w-[980px] table-auto">
+                    {/* gunakan array agar tidak ada whitespace node di colgroup */}
+                    <colgroup>
+                      {[
+                        44, // checkbox
+                        360, // Item
+                        160, // Customer
+                        160, // Store
+                        120, // Payment
+                        120, // Price
+                        320, // Match
+                        120, // Date
+                        120, // Selling
+                      ].map((w, i) => (
+                        <col key={i} style={{ width: `${w}px` }} />
+                      ))}
+                    </colgroup>
+
+                    <TableHeader className="sticky top-0 z-[1] bg-background">
+                      <TableRow>
+                        <TableHead className="px-3 w-11">
                           <Checkbox
-                            checked={row.selected}
-                            onCheckedChange={() => toggleRowSelection(row.id)}
+                            checked={csvData.every((row) => row.selected)}
+                            onCheckedChange={toggleAllSelections}
                           />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {row.itemPurchase}
-                        </TableCell>
-                        <TableCell>{row.customerName}</TableCell>
-                        <TableCell>{row.storeName}</TableCell>
-                        <TableCell>{row.paymentMethod}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatRupiah(row.purchasePrice)}
-                        </TableCell>
-                        <TableCell>
+                        </TableHead>
+                        <TableHead className="px-3">Item</TableHead>
+                        <TableHead className="px-3">Customer</TableHead>
+                        <TableHead className="px-3">Store</TableHead>
+                        <TableHead className="px-3">Payment</TableHead>
+                        <TableHead className="px-3 text-right">Price</TableHead>
+                        <TableHead className="px-3">Match</TableHead>
+                        <TableHead className="px-3">Date</TableHead>
+                        <TableHead className="px-3 text-right">
+                          Selling
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                      {csvData.map((row) => (
+                        <TableRow key={row.id} className="align-top">
+                          <TableCell className="px-3">
+                            <Checkbox
+                              checked={row.selected}
+                              onCheckedChange={() => toggleRowSelection(row.id)}
+                            />
+                          </TableCell>
+
+                          <TableCell
+                            className="px-3 font-medium truncate"
+                            title={row.itemPurchase}
+                          >
+                            {row.itemPurchase}
+                          </TableCell>
+                          <TableCell
+                            className="px-3 truncate"
+                            title={row.customerName || ""}
+                          >
+                            {row.customerName}
+                          </TableCell>
+                          <TableCell
+                            className="px-3 truncate"
+                            title={row.storeName || ""}
+                          >
+                            {row.storeName}
+                          </TableCell>
+                          <TableCell className="px-3 whitespace-nowrap">
+                            {row.paymentMethod}
+                          </TableCell>
+                          <TableCell className="px-3 text-right font-mono whitespace-nowrap">
+                            {formatRupiah(row.purchasePrice)}
+                          </TableCell>
+
+                          <TableCell className="px-3">
+                            {row.matchedProduct ? (
+                              <div
+                                className="flex items-center gap-2 truncate"
+                                title={row.matchedProduct.name}
+                              >
+                                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                                <span className="text-sm truncate">
+                                  {row.matchedProduct.name} (
+                                  {Math.round(
+                                    (row.matchedProduct.similarity || 0) * 100
+                                  )}
+                                  %)
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                                <span className="text-sm text-muted-foreground">
+                                  No match
+                                </span>
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="px-3 whitespace-nowrap">
+                            {new Date(row.date).toLocaleDateString("id-ID")}
+                          </TableCell>
+                          <TableCell className="px-3 text-right font-mono whitespace-nowrap">
+                            {row.matchedProduct
+                              ? formatRupiah(row.matchedProduct.price)
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* MOBILE: cards */}
+              <div className="md:hidden">
+                {/* viewport scroll khusus mobile */}
+                <div className="space-y-3 overflow-y-auto max-h-[60vh] pr-1">
+                  {csvData.map((row) => (
+                    <div key={row.id} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={row.selected}
+                              onCheckedChange={() => toggleRowSelection(row.id)}
+                            />
+                            <p className="font-medium break-words">
+                              {row.itemPurchase}
+                            </p>
+                          </div>
+
+                          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                            <span className="text-muted-foreground">
+                              Customer
+                            </span>
+                            <span className="truncate">
+                              {row.customerName || "-"}
+                            </span>
+
+                            <span className="text-muted-foreground">Store</span>
+                            <span className="truncate">
+                              {row.storeName || "-"}
+                            </span>
+
+                            <span className="text-muted-foreground">
+                              Payment
+                            </span>
+                            <span className="truncate">
+                              {row.paymentMethod || "-"}
+                            </span>
+
+                            <span className="text-muted-foreground">Price</span>
+                            <span className="font-mono">
+                              {formatRupiah(row.purchasePrice)}
+                            </span>
+
+                            <span className="text-muted-foreground">Date</span>
+                            <span>
+                              {new Date(row.date).toLocaleDateString("id-ID")}
+                            </span>
+
+                            <span className="text-muted-foreground">
+                              Selling
+                            </span>
+                            <span className="font-mono">
+                              {row.matchedProduct
+                                ? formatRupiah(row.matchedProduct.price)
+                                : "-"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
                           {row.matchedProduct ? (
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="h-4 w-4 text-green-600" />
-                              <span className="text-sm">
-                                {row.matchedProduct.name} (
-                                {Math.round(
-                                  (row.matchedProduct.similarity || 0) * 100
-                                )}
-                                %)
-                              </span>
+                            <div className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                              <CheckCircle className="h-3 w-3" />
+                              {Math.round(
+                                (row.matchedProduct.similarity || 0) * 100
+                              )}
+                              %
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2">
-                              <AlertCircle className="h-4 w-4 text-yellow-600" />
-                              <span className="text-sm text-muted-foreground">
-                                No match
-                              </span>
+                            <div className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+                              <AlertCircle className="h-3 w-3" />
+                              No match
                             </div>
                           )}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(row.date).toLocaleDateString("id-ID")}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {row.matchedProduct
-                            ? formatRupiah(row.matchedProduct.price)
-                            : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

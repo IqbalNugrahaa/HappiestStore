@@ -41,6 +41,7 @@ type RevenueApiData = {
     totalRevenue: number;
     thisMonthRevenue: number;
     prevMonthRevenue: number;
+    yesterdayRevenueThisMonth?: number;
   };
   averages?: {
     thisMonthAverageRevenue: number; // NEW
@@ -117,12 +118,20 @@ export default function RevenuePage() {
   const fetchRevenue = async () => {
     setLoadingRevenue(true);
     try {
-      const res = await fetch("/api/revenue", { cache: "no-store" });
+      const qs = new URLSearchParams();
+      if (selectedMonth !== "all") qs.set("month", String(selectedMonth));
+      if (selectedYear !== "all") qs.set("year", String(selectedYear));
+
+      const res = await fetch(`/api/revenue?${qs.toString()}`, {
+        cache: "no-store",
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to fetch revenue");
-      setRevMetrics(json.data as RevenueApiData);
+
+      // backend kamu mengembalikan objek top-level { totals, rows, ... }
+      setRevMetrics(json as RevenueApiData);
     } catch (e) {
-      // (optional) tampilkan toast/log
+      // optional: toast/log
     } finally {
       setLoadingRevenue(false);
     }
@@ -362,29 +371,40 @@ export default function RevenuePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Transaction Form Modal */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
-              {editingTransaction ? t("editTransaction") : t("addTransaction")}
-            </DialogTitle>
-            <DialogDescription>
-              {editingTransaction
-                ? "Perbarui informasi transaksi"
-                : "Tambahkan transaksi baru"}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          className="
+    p-0 h-[90vh] w-full
+    max-w-[95vw] sm:!max-w-[95vw] md:!max-w-[90vw] lg:!max-w-[80vw] xl:!max-w-[1200px]
+    overflow-hidden
+  "
+        >
+          <div className="p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+                {editingTransaction
+                  ? t("editTransaction")
+                  : t("addTransaction")}
+              </DialogTitle>
+              <DialogDescription>
+                {editingTransaction
+                  ? "Perbarui informasi transaksi"
+                  : "Tambahkan transaksi baru"}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
-          <TransactionForm
-            transaction={editingTransaction || undefined}
-            onSubmit={async (payload) => {
-              await handleSubmit(payload);
-              setShowForm(false);
-            }}
-            onCancel={() => setShowForm(false)}
-            isLoading={isSubmitting}
-          />
+          <div className="h-[calc(90vh-100px)] overflow-y-auto px-4 sm:px-6">
+            <TransactionForm
+              transaction={editingTransaction || undefined}
+              onSubmit={async (payload) => {
+                await handleSubmit(payload);
+                setShowForm(false);
+              }}
+              onCancel={() => setShowForm(false)}
+              isLoading={isSubmitting}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

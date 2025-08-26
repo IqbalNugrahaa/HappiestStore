@@ -16,16 +16,19 @@ const MONTHS = [
   "December",
 ];
 
-// ubah "1".."12" → "January".."December"; kalau sudah teks, kembalikan as is
-function normalizeMonth(m: string): string {
-  const trimmed = m.trim();
-  const n = Number.parseInt(trimmed, 10);
-  if (!Number.isNaN(n) && n >= 1 && n <= 12) return MONTHS[n - 1];
-  // normalisasi case (opsional)
-  const idx = MONTHS.findIndex(
-    (x) => x.toLowerCase() === trimmed.toLowerCase()
-  );
-  return idx !== -1 ? MONTHS[idx] : trimmed;
+// Helper: pastikan string tanggal "YYYY-MM-DD"
+function toDateOnly(input?: string): string | null {
+  if (!input) return null;
+  // dukung ISO string juga
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  // pakai tanggal UTC → slice(0,10) hasil yyyy-mm-dd
+  return d.toISOString().slice(0, 10);
+}
+
+function toNumber(n: any, fallback = 0): number {
+  const num = Number(n);
+  return Number.isFinite(num) ? num : fallback;
 }
 
 export async function GET(req: NextRequest) {
@@ -116,97 +119,97 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
 
-    // Check if user is authenticated
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+  // Auth (wajib bila RLS aktif)
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const body = await req.json().catch(() => ({} as any));
 
-    const {
-      date,
-      item_purchased,
-      customer_name,
-      store_name,
-      payment_method,
-      purchase_price,
-      selling_price,
-      revenue,
-      notes,
-    } = await request.json();
+  // Terima dua nama field & samakan
+  const item_purchased = String(
+    body?.item_purchased ?? body?.item_purchase ?? ""
+  ).trim();
 
-    if (
-      !item_purchased ||
-      typeof item_purchased !== "string" ||
-      item_purchased.trim().length === 0
-    ) {
-      return NextResponse.json(
-        { error: "Item purchase is required" },
-        { status: 400 }
-      );
-    }
+  // Ambil product id dari 2 kemungkinan nama
+  const productIdRaw = body?.product_id ?? body?.id_product ?? null;
+  const hasProduct =
+    productIdRaw !== null &&
+    productIdRaw !== undefined &&
+    String(productIdRaw) !== "";
 
-    if (
-      !selling_price ||
-      typeof selling_price !== "number" ||
-      selling_price <= 0
-    ) {
-      return NextResponse.json(
-        { error: "Valid selling price is required" },
-        { status: 400 }
-      );
-    }
+  // Default is_custom_item: true kalau tidak ada id_product
+  const is_custom_item =
+    typeof body?.is_custom_item === "boolean"
+      ? body.is_custom_item
+      : !hasProduct;
 
-    if (!date) {
-      return NextResponse.json({ error: "Date is required" }, { status: 400 });
-    }
-
-    const transactionDate = new Date(date);
-    const month = transactionDate.getMonth() + 1;
-    const year = transactionDate.getFullYear();
-
-    // Insert transaction
-    const { data: transaction, error } = await supabase
-      .from("transactions")
-      .insert([
-        {
-          date,
-          item_purchased: item_purchased.trim(),
-          customer_name: customer_name?.trim() || null,
-          store_name: store_name?.trim() || null,
-          payment_method: payment_method?.trim() || null,
-          purchase_price: purchase_price || 0,
-          selling_price,
-          revenue: revenue || selling_price,
-          notes: notes?.trim() || null,
-          month,
-          year,
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error creating transaction:", error);
-      return NextResponse.json(
-        { error: "Failed to create transaction" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ transaction }, { status: 201 });
-  } catch (error) {
-    console.error("Unexpected error:", error);
+  // Validasi minimal: bila custom item, butuh nama item
+  if (is_custom_item && !item_purchased) {
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: "Item purchase is required" },
+      { status: 400 }
     );
   }
+
+  // Normalisasi tanggal + month/year
+  const date = toDateOnly(body?.date) ?? new Date().toISOString().slice(0, 10);
+  const d = new Date(date + "T00:00:00Z");
+  const month = Number(body?.month ?? d.getUTCMonth() + 1);
+  const year = Number(body?.year ?? d.getUTCFullYear());
+
+  // Payload insert — pakai kolom yang ADA di DB: id_product
+  const row: Record<string, any> = {
+    // Hapus baris ini jika tabel-mu tidak punya kolom user_id
+    user_id: user.id,
+
+    date,
+    item_purchased, // pakai nama kolom DB
+    customer_name: body?.customer_name ?? null,
+    store_name: body?.store_name ?? null,
+    payment_method: body?.payment_method ?? null,
+    purchase_price: toNumber(body?.purchase_price),
+    selling_price: toNumber(body?.selling_price),
+    revenue:
+      body?.revenue !== undefined
+        ? toNumber(body?.revenue)
+        : toNumber(body?.selling_price) - toNumber(body?.purchase_price),
+    notes: body?.notes ?? null,
+    month,
+    year,
+    is_custom_item,
+  };
+
+  // ⬇️ inilah perubahan utamanya: isi id_product (bukan product_id)
+  if (hasProduct) {
+    row.id_product = productIdRaw;
+  }
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json(
+      {
+        error: "Failed to create transaction",
+        details: error.message,
+        hint:
+          error.message?.includes("foreign key") &&
+          "Pastikan id_product valid (ada di tabel products).",
+      },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json({ data }, { status: 201 });
 }
