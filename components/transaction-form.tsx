@@ -341,20 +341,26 @@ export function TransactionForm({
                     variant="outline"
                     role="combobox"
                     aria-expanded={productOpen}
-                    className="w-full justify-between"
+                    // penting: cegah overflow & beri ruang ke teks untuk truncate
+                    className="w-full justify-between overflow-hidden"
                     disabled={isLoading}
                   >
-                    {formData.is_custom_item
-                      ? formData.item_purchased || "Other (custom) — type item"
-                      : selectedProduct
-                      ? `${selectedProduct.name} — ${formatIDR(
-                          selectedProduct.price
-                        )}`
-                      : formData.item_purchased || "Select product"}
+                    <span className="truncate min-w-0 flex-1 text-left">
+                      {formData.is_custom_item
+                        ? formData.item_purchased ||
+                          "Other (custom) — type item"
+                        : selectedProduct
+                        ? `${selectedProduct.name} — ${formatIDR(
+                            selectedProduct.price
+                          )}`
+                        : formData.item_purchased || "Select product"}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-[360px]">
+
+                {/* lebar responsif: penuh di mobile, 360px di >=sm */}
+                <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[360px]">
                   <Command>
                     <CommandInput
                       placeholder="Search product..."
@@ -364,8 +370,8 @@ export function TransactionForm({
                     <CommandEmpty>
                       {productsLoading ? "Loading..." : "No product found."}
                     </CommandEmpty>
+
                     <CommandGroup>
-                      {/* Opsi produk dari DB */}
                       {products.map((p) => {
                         const selected =
                           !formData.is_custom_item &&
@@ -386,19 +392,24 @@ export function TransactionForm({
                                   is_custom_item: false,
                                   id_product: p.id,
                                   item_purchased: p.name,
-                                  selling_price: newSelling, // override harga dari produk
-                                  revenue: newRevenue, // ← hitung ulang revenue
+                                  selling_price: newSelling,
+                                  revenue: newRevenue,
                                 };
                               });
                               setProductOpen(false);
                             }}
+                            className="gap-2"
                           >
-                            <div className="mr-2 h-4 w-4 flex items-center justify-center">
+                            <div className="h-4 w-4 flex items-center justify-center shrink-0">
                               {selected ? <Check className="h-4 w-4" /> : null}
                             </div>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{p.name}</span>
-                              <span className="text-xs opacity-70">
+
+                            {/* batasi jadi satu baris + elipsis di mobile */}
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-medium truncate">
+                                {p.name}
+                              </span>
+                              <span className="text-xs opacity-70 truncate">
                                 {formatIDR(p.price)}
                               </span>
                             </div>
@@ -406,7 +417,6 @@ export function TransactionForm({
                         );
                       })}
 
-                      {/* Opsi “Other / Custom” */}
                       <CommandItem
                         key={OTHER_ID}
                         value="other custom manual"
@@ -420,15 +430,18 @@ export function TransactionForm({
                             revenue: computeRevenue(
                               prev.selling_price,
                               prev.purchase_price
-                            ), // jaga konsistensi
+                            ),
                           }));
                           setProductOpen(false);
                         }}
+                        className="gap-2"
                       >
-                        <div className="mr-2 h-4 w-4" />
-                        <div className="flex flex-col">
-                          <span className="font-medium">Other (custom)</span>
-                          <span className="text-xs opacity-70">
+                        <div className="h-4 w-4 shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">
+                            Other (custom)
+                          </span>
+                          <span className="text-xs opacity-70 truncate">
                             Type item name & price manually
                           </span>
                         </div>

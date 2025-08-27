@@ -181,18 +181,6 @@ export function TransactionsTable({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {t("transactions")}
-          <Badge variant="secondary">{filtered.length}</Badge>
-        </CardTitle>
-        <CardDescription>
-          {t("totalRevenue")}:{" "}
-          <span className="font-mono font-semibold">
-            {formatRupiah(totalRevenue)}
-          </span>
-        </CardDescription>
-      </CardHeader>
       <CardContent>
         <div className="flex items-center gap-2 mb-4">
           <div className="relative flex-1">

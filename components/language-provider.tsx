@@ -1,17 +1,25 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 
-type Language = "en" | "id"
+type Language = "en" | "id";
 
 interface LanguageContextType {
-  language: Language
-  toggleLanguage: () => void
-  setLanguage: (lang: Language) => void
-  t: (key: string, params?: Record<string, string | number>) => string
+  language: Language;
+  toggleLanguage: () => void;
+  setLanguage: (lang: Language) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
+const LanguageContext = createContext<LanguageContextType | undefined>(
+  undefined
+);
 
 // Enhanced translation dictionary
 const translations = {
@@ -80,7 +88,8 @@ const translations = {
     transactionCreated: "Transaction created successfully",
     transactionUpdated: "Transaction updated successfully",
     transactionDeleted: "Transaction deleted successfully",
-    deleteTransactionConfirm: "Are you sure you want to delete this transaction?",
+    deleteTransactionConfirm:
+      "Are you sure you want to delete this transaction?",
     selectProduct: "Select a product",
     customProductName: "Product Name (Custom)",
     enterCustomProduct: "Or enter custom product name",
@@ -88,6 +97,12 @@ const translations = {
     averageValue: "Average value",
     fromLastMonth: "from last month",
     trackRevenue: "Track your revenue and transactions",
+    today: "Today",
+    countTransactions: "Total Transactions",
+    totalRevenueToday: "Total Revenue Today",
+    revenueToday: "Revenue Today",
+    totalRevenueYesterday: "Total Revenue Yesterday",
+    revenueYesterday: "Revenue Yesterday",
 
     // Forms
     email: "Email",
@@ -121,14 +136,16 @@ const translations = {
     uploadCsv: "Upload CSV",
     dragDropCsv: "Drag and drop your CSV file here, or click to select",
     csvFormat: "CSV Format",
-    csvFormatDesc: "Your CSV should have columns: Product Name, Quantity, Unit Price, Transaction Date",
+    csvFormatDesc:
+      "Your CSV should have columns: Product Name, Quantity, Unit Price, Transaction Date",
     uploadFile: "Upload File",
     processing: "Processing...",
     uploadSuccess: "File uploaded successfully",
     uploadError: "Failed to upload file",
     invalidFile: "Invalid file format. Please upload a CSV file.",
     fuzzyMatching: "Fuzzy Matching",
-    fuzzyMatchingDesc: "Automatically match product names with existing products",
+    fuzzyMatchingDesc:
+      "Automatically match product names with existing products",
 
     // Stats and analytics
     growth: "Growth",
@@ -149,8 +166,10 @@ const translations = {
     downloadTemplate: "Download Template",
     selectFile: "Select File",
     bulkUploadProducts: "Bulk Upload Products",
-    productCsvFormat: 'Upload products via CSV file. Format: "name","type","price"',
-    transactionCsvFormat: "Date, Item Purchase, Customer Name, Store Name, Payment Method, Purchase, Notes",
+    productCsvFormat:
+      'Upload products via CSV file. Format: "name","type","price"',
+    transactionCsvFormat:
+      "Date, Item Purchase, Customer Name, Store Name, Payment Method, Purchase, Notes",
   },
   id: {
     // Navigation
@@ -213,11 +232,13 @@ const translations = {
     thisMonth: "Bulan Ini",
     avgTransaction: "Rata-rata Transaksi",
     noTransactions: "Belum ada transaksi. Tambahkan transaksi pertama Anda!",
-    noTransactionsSearch: "Tidak ada transaksi yang ditemukan sesuai pencarian Anda.",
+    noTransactionsSearch:
+      "Tidak ada transaksi yang ditemukan sesuai pencarian Anda.",
     transactionCreated: "Transaksi berhasil dibuat",
     transactionUpdated: "Transaksi berhasil diperbarui",
     transactionDeleted: "Transaksi berhasil dihapus",
-    deleteTransactionConfirm: "Apakah Anda yakin ingin menghapus transaksi ini?",
+    deleteTransactionConfirm:
+      "Apakah Anda yakin ingin menghapus transaksi ini?",
     selectProduct: "Pilih produk",
     customProductName: "Nama Produk (Kustom)",
     enterCustomProduct: "Atau masukkan nama produk kustom",
@@ -225,6 +246,12 @@ const translations = {
     averageValue: "Nilai rata-rata",
     fromLastMonth: "dari bulan lalu",
     trackRevenue: "Lacak pendapatan dan transaksi Anda",
+    today: "Hari Ini",
+    countTransactions: "Jumlah Transaksi",
+    totalRevenueToday: "Total Pendapatan Hari Ini",
+    revenueToday: "Pendapatan Hari Ini",
+    totalRevenueYesterday: "Total Pendapatan Kemarin",
+    revenueYesterday: "Pendapatan Kemarin",
 
     // Forms
     email: "Email",
@@ -256,16 +283,19 @@ const translations = {
     csvUpload: "Unggah CSV",
     bulkUpload: "Unggah Massal",
     uploadCsv: "Unggah CSV",
-    dragDropCsv: "Seret dan lepas file CSV Anda di sini, atau klik untuk memilih",
+    dragDropCsv:
+      "Seret dan lepas file CSV Anda di sini, atau klik untuk memilih",
     csvFormat: "Format CSV",
-    csvFormatDesc: "CSV Anda harus memiliki kolom: Nama Produk, Jumlah, Harga Satuan, Tanggal Transaksi",
+    csvFormatDesc:
+      "CSV Anda harus memiliki kolom: Nama Produk, Jumlah, Harga Satuan, Tanggal Transaksi",
     uploadFile: "Unggah File",
     processing: "Memproses...",
     uploadSuccess: "File berhasil diunggah",
     uploadError: "Gagal mengunggah file",
     invalidFile: "Format file tidak valid. Silakan unggah file CSV.",
     fuzzyMatching: "Pencocokan Fuzzy",
-    fuzzyMatchingDesc: "Otomatis mencocokkan nama produk dengan produk yang ada",
+    fuzzyMatchingDesc:
+      "Otomatis mencocokkan nama produk dengan produk yang ada",
 
     // Stats and analytics
     growth: "Pertumbuhan",
@@ -286,53 +316,62 @@ const translations = {
     downloadTemplate: "Unduh Template",
     selectFile: "Pilih File",
     bulkUploadProducts: "Unggah Produk Massal",
-    productCsvFormat: 'Unggah produk melalui file CSV. Format: "nama","tipe","harga"',
-    transactionCsvFormat: "Tanggal, Pembelian Item, Nama Pelanggan, Nama Toko, Metode Pembayaran, Pembelian, Catatan",
+    productCsvFormat:
+      'Unggah produk melalui file CSV. Format: "nama","tipe","harga"',
+    transactionCsvFormat:
+      "Tanggal, Pembelian Item, Nama Pelanggan, Nama Toko, Metode Pembayaran, Pembelian, Catatan",
   },
-}
+};
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en")
+  const [language, setLanguageState] = useState<Language>("en");
 
   useEffect(() => {
-    const savedLanguage = localStorage.getItem("revenue-app-language") as Language
+    const savedLanguage = localStorage.getItem(
+      "revenue-app-language"
+    ) as Language;
     if (savedLanguage && (savedLanguage === "en" || savedLanguage === "id")) {
-      setLanguageState(savedLanguage)
+      setLanguageState(savedLanguage);
     }
-  }, [])
+  }, []);
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang)
-    localStorage.setItem("revenue-app-language", lang)
-  }
+    setLanguageState(lang);
+    localStorage.setItem("revenue-app-language", lang);
+  };
 
   const toggleLanguage = () => {
-    const newLanguage = language === "en" ? "id" : "en"
-    setLanguage(newLanguage)
-  }
+    const newLanguage = language === "en" ? "id" : "en";
+    setLanguage(newLanguage);
+  };
 
   const t = (key: string, params?: Record<string, string | number>): string => {
-    let translation = translations[language][key as keyof typeof translations.en] || key
+    let translation =
+      translations[language][key as keyof typeof translations.en] || key;
 
     // Replace parameters in translation
     if (params) {
       Object.entries(params).forEach(([paramKey, paramValue]) => {
-        translation = translation.replace(`{${paramKey}}`, String(paramValue))
-      })
+        translation = translation.replace(`{${paramKey}}`, String(paramValue));
+      });
     }
 
-    return translation
-  }
+    return translation;
+  };
 
   return (
-    <LanguageContext.Provider value={{ language, toggleLanguage, setLanguage, t }}>{children}</LanguageContext.Provider>
-  )
+    <LanguageContext.Provider
+      value={{ language, toggleLanguage, setLanguage, t }}
+    >
+      {children}
+    </LanguageContext.Provider>
+  );
 }
 
 export function useLanguage() {
-  const context = useContext(LanguageContext)
+  const context = useContext(LanguageContext);
   if (context === undefined) {
-    throw new Error("useLanguage must be used within a LanguageProvider")
+    throw new Error("useLanguage must be used within a LanguageProvider");
   }
-  return context
+  return context;
 }

@@ -42,6 +42,7 @@ type RevenueApiData = {
     thisMonthRevenue: number;
     prevMonthRevenue: number;
     yesterdayRevenueThisMonth?: number;
+    todayRevenue?: number; // NEW
   };
   averages?: {
     thisMonthAverageRevenue: number; // NEW

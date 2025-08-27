@@ -9,7 +9,7 @@ type RevenueRow = {
   dana: number | null;
   spay: number | null;
   qris: number | null;
-  average_revenue: number | null;
+  average_revenue?: number | null;
 };
 
 function pad2(n: number) {
@@ -44,6 +44,9 @@ function prevDayUTC(y: number, m: number, d: number) {
   };
 }
 const n = (v: any) => Number(v) || 0;
+const sumMethods = (r: RevenueRow) =>
+  n(r.bca) + n(r.dana) + n(r.spay) + n(r.qris);
+const rowTotal = (r: RevenueRow) => n(r.total_revenue) || sumMethods(r);
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -58,7 +61,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Bulan & tahun target
+  // Bulan & tahun target (default = bulan "hari ini" Asia/Jakarta)
   const today = todayPartsJakarta();
   const month = Number(searchParams.get("month") || today.m);
   const year = Number(searchParams.get("year") || today.y);
@@ -81,12 +84,9 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = (monthRows ?? []) as RevenueRow[];
-  const sumMethods = (r: RevenueRow) =>
-    n(r.bca) + n(r.dana) + n(r.spay) + n(r.qris);
 
-  const thisMonthRevenue =
-    rows.reduce((acc, r) => acc + (n(r.total_revenue) || sumMethods(r)), 0) ||
-    0;
+  // ===== Agregat Bulan Ini =====
+  const thisMonthRevenue = rows.reduce((acc, r) => acc + rowTotal(r), 0);
 
   const byMethodThisMonth = {
     BCA: rows.reduce((a, r) => a + n(r.bca), 0),
@@ -94,6 +94,29 @@ export async function GET(req: NextRequest) {
     SPAY: rows.reduce((a, r) => a + n(r.spay), 0),
     QRIS: rows.reduce((a, r) => a + n(r.qris), 0),
   };
+
+  // ===== Today (Asia/Jakarta) =====
+  const todayStr = ymd(today.y, today.m, today.d);
+  let todayRevenue = 0;
+
+  if (year === today.y && month === today.m) {
+    // kalau filter bulan == bulan ini, pakai rows yang sudah diambil
+    const todayRow = rows.find((r) => r.date === todayStr);
+    if (todayRow) todayRevenue = rowTotal(todayRow);
+  } else {
+    // kalau filter bukan bulan ini, ambil langsung 1 row untuk hari ini
+    const { data: tRows, error: tErr } = await supabase
+      .from("revenue")
+      .select("date,total_revenue,bca,dana,spay,qris")
+      .eq("user_id", user.id)
+      .eq("date", todayStr)
+      .limit(1);
+
+    if (!tErr && tRows && tRows.length) {
+      const tr = tRows[0] as RevenueRow;
+      todayRevenue = rowTotal(tr);
+    }
+  }
 
   // --- Ambil data bulan lalu ---
   const prevMonth = month === 1 ? 12 : month - 1;
@@ -116,7 +139,7 @@ export async function GET(req: NextRequest) {
 
   const prevMonthRevenue =
     (prevRows ?? []).reduce(
-      (acc: any, r: any) =>
+      (acc: number, r: RevenueRow) =>
         acc +
         (n(r.total_revenue) || n(r.bca) + n(r.dana) + n(r.spay) + n(r.qris)),
       0
@@ -137,17 +160,26 @@ export async function GET(req: NextRequest) {
 
   const totalRevenue =
     (allRows ?? []).reduce(
-      (acc: any, r: any) =>
+      (acc: number, r: RevenueRow) =>
         acc +
         (n(r.total_revenue) || n(r.bca) + n(r.dana) + n(r.spay) + n(r.qris)),
       0
     ) || 0;
 
   const byMethodAllTime = {
-    BCA: (allRows ?? []).reduce((a: any, r: any) => a + n(r.bca), 0),
-    DANA: (allRows ?? []).reduce((a: any, r: any) => a + n(r.dana), 0),
-    SPAY: (allRows ?? []).reduce((a: any, r: any) => a + n(r.spay), 0),
-    QRIS: (allRows ?? []).reduce((a: any, r: any) => a + n(r.qris), 0),
+    BCA: (allRows ?? []).reduce((a: number, r: RevenueRow) => a + n(r.bca), 0),
+    DANA: (allRows ?? []).reduce(
+      (a: number, r: RevenueRow) => a + n(r.dana),
+      0
+    ),
+    SPAY: (allRows ?? []).reduce(
+      (a: number, r: RevenueRow) => a + n(r.spay),
+      0
+    ),
+    QRIS: (allRows ?? []).reduce(
+      (a: number, r: RevenueRow) => a + n(r.qris),
+      0
+    ),
   };
 
   // --- Yesterday (hanya jika masih di bulan & tahun filter) ---
@@ -188,6 +220,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // --- Averages ---
   const daysCount = rows.length || 1;
   const thisMonthAverageRevenue = thisMonthRevenue / daysCount;
   const prevDaysCount = (prevRows ?? []).length || 1;
@@ -200,6 +233,7 @@ export async function GET(req: NextRequest) {
       thisMonthRevenue,
       prevMonthRevenue,
       yesterdayRevenueThisMonth,
+      todayRevenue, // <= TAMBAHAN: pendapatan untuk tanggal hari ini (Asia/Jakarta)
     },
     averages: {
       thisMonthAverageRevenue,
@@ -207,7 +241,7 @@ export async function GET(req: NextRequest) {
     },
     byMethodThisMonth,
     byMethodAllTime,
-    yesterdayByMethod, // untuk debug/visualisasi kalau perlu
+    yesterdayByMethod, // opsional untuk debug/visualisasi
     month,
     year,
     range: { start, endExclusive: end },

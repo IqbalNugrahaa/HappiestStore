@@ -11,7 +11,7 @@ import { useLanguage } from "@/components/language-provider";
 /** ===== Types ===== */
 interface Transaction {
   id: string;
-  date: string;
+  date: string; // ISO date or "YYYY-MM-DD"
   item_purchased: string;
   customer_name?: string;
   store_name?: string;
@@ -41,6 +41,7 @@ export type RevenueApiData = {
     thisMonthRevenue: number;
     prevMonthRevenue: number;
     yesterdayRevenueThisMonth?: number;
+    todayRevenue?: number;
   };
   averages?: {
     thisMonthAverageRevenue: number;
@@ -59,7 +60,21 @@ interface RevenueStatsProps {
   isLoading?: boolean;
 }
 
-/** ===== Helper global: YMD “kemarin” Asia/Jakarta ===== */
+/** ===== Helpers ===== */
+const n = (v: unknown) => Number(v) || 0;
+
+const normalizeMethod = (m?: string) => {
+  const u = (m || "").trim().toUpperCase();
+  if (u === "SHOPEEPAY") return "SPAY";
+  return u; // BCA, DANA, SPAY, QRIS, etc.
+};
+
+const getTxRevenue = (t: Transaction) =>
+  Number(
+    t.revenue ?? Number(t.selling_price ?? 0) - Number(t.purchase_price ?? 0)
+  ) || 0;
+
+/** YMD “kemarin” Asia/Jakarta */
 function yesterdayJakartaYMD() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Jakarta",
@@ -77,7 +92,21 @@ function yesterdayJakartaYMD() {
   return `${dt.getUTCFullYear()}-${mm}-${dd}`;
 }
 
-/** ===== Card metode ===== */
+/** YMD “hari ini” Asia/Jakarta */
+function todayJakartaYMD() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year")?.value!;
+  const m = parts.find((p) => p.type === "month")?.value!;
+  const d = parts.find((p) => p.type === "day")?.value!;
+  return `${y}-${m}-${d}`;
+}
+
+/** ===== Per-metode Cards ===== */
 type MethodCardProps = {
   title: "BCA" | "DANA" | "SPAY" | "QRIS";
   amount?: number;
@@ -109,6 +138,50 @@ export const QrisCard = ({ amount = 0 }: { amount?: number }) => (
   <MethodCard title="QRIS" amount={amount} />
 );
 
+/** ===== Inti refactor: kalkulasi total per metode per bulan =====
+ * Skenario:
+ * 1) Jika backend sudah kirim `byMethodThisMonth`, gunakan itu (akurasi tertinggi).
+ * 2) Jika belum, tetapi ada `rows` revenue bulan berjalan, agregasi dari rows (bca/dana/spay/qris).
+ * 3) Jika tidak ada keduanya, fallback dari daftar `transactions` bulan berjalan (hitung per transaksi).
+ */
+function calculateMonthlyByMethod(
+  metrics: RevenueApiData | undefined,
+  currentMonthTransactions: Transaction[]
+): { BCA: number; DANA: number; SPAY: number; QRIS: number } {
+  // 1) Backend direct
+  if (metrics?.byMethodThisMonth) {
+    return metrics.byMethodThisMonth;
+  }
+
+  // 2) Dari rows bulanan (jika tersedia)
+  if (metrics?.rows && metrics.rows.length) {
+    return metrics.rows.reduce(
+      (acc, r) => {
+        acc.BCA += n(r.bca);
+        acc.DANA += n(r.dana);
+        acc.SPAY += n(r.spay);
+        acc.QRIS += n(r.qris);
+        return acc;
+      },
+      { BCA: 0, DANA: 0, SPAY: 0, QRIS: 0 }
+    );
+  }
+
+  // 3) Fallback dari transaksi bulan ini
+  return currentMonthTransactions.reduce(
+    (acc, tx) => {
+      const method = normalizeMethod(tx.payment_method);
+      const rev = getTxRevenue(tx);
+      if (method === "BCA") acc.BCA += rev;
+      else if (method === "DANA") acc.DANA += rev;
+      else if (method === "SPAY") acc.SPAY += rev;
+      else if (method === "QRIS") acc.QRIS += rev;
+      return acc;
+    },
+    { BCA: 0, DANA: 0, SPAY: 0, QRIS: 0 }
+  );
+}
+
 /** ===== Komponen utama ===== */
 export function RevenueStats({
   transactions = [],
@@ -130,33 +203,34 @@ export function RevenueStats({
     </Card>
   );
 
-  const getTxRevenue = (t: Transaction) =>
-    Number(
-      t.revenue ?? Number(t.selling_price ?? 0) - Number(t.purchase_price ?? 0)
-    ) || 0;
-
+  /** ==== Penentuan bulan berjalan dari sisi client ==== */
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
-  const currentMonthTransactions = transactions.filter((t) => {
-    const d = new Date(t.date);
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  });
+  const currentMonthTransactions = useMemo(
+    () =>
+      transactions.filter((t) => {
+        // Asumsi t.date parsable; bila "YYYY-MM-DD", Date akan gunakan local TZ (OK untuk estimasi UI)
+        const d = new Date(t.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      }),
+    [transactions, currentMonth, currentYear]
+  );
 
   const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
   const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-  const prevMonthTransactions = transactions.filter((t) => {
-    const d = new Date(t.date);
-    return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
-  });
+  const prevMonthTransactions = useMemo(
+    () =>
+      transactions.filter((t) => {
+        const d = new Date(t.date);
+        return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
+      }),
+    [transactions, prevMonth, prevYear]
+  );
 
-  // ---- Totals (server-first, fallback client) ----
-  const totalRevenue =
-    metrics?.totals?.totalRevenue ??
-    transactions.reduce((sum, t) => sum + getTxRevenue(t), 0);
-
+  /** ==== Agregat bulan ini & bulan lalu ==== */
   const thisMonthRevenue =
     metrics?.totals?.thisMonthRevenue ??
     currentMonthTransactions.reduce((sum, t) => sum + getTxRevenue(t), 0);
@@ -171,15 +245,11 @@ export function RevenueStats({
       : 0;
   const isPositiveGrowth = growth >= 0;
 
-  const totalTx = transactions.length;
-
-  // ---- Yesterday Revenue (This Month) ----
+  /** ==== Yesterday (timezone Asia/Jakarta) ==== */
   const yesterdayRevenue = useMemo(() => {
-    // 1) gunakan nilai backend kalau ada
     if (typeof metrics?.totals?.yesterdayRevenueThisMonth === "number") {
       return metrics.totals.yesterdayRevenueThisMonth;
     }
-    // 2) fallback dari rows (jika dikirim)
     const rows: any[] = (metrics as any)?.rows ?? [];
     const ymd = yesterdayJakartaYMD();
     if (rows.length) {
@@ -188,45 +258,41 @@ export function RevenueStats({
         .reduce(
           (sum, r) =>
             sum +
-            (Number(r?.total_revenue) ||
-              Number(r?.bca || 0) +
-                Number(r?.dana || 0) +
-                Number(r?.spay || 0) +
-                Number(r?.qris || 0)),
+            (n(r?.total_revenue) ||
+              n(r?.bca) + n(r?.dana) + n(r?.spay) + n(r?.qris)),
           0
         );
     }
-    // 3) fallback terakhir dari daftar transaksi (jika ada)
     return transactions
       .filter((t) => String(t.date).slice(0, 10) === ymd)
       .reduce((sum, t) => sum + getTxRevenue(t), 0);
   }, [metrics, transactions]);
 
-  // ---- Per metode (This Month) ----
-  const tm = metrics?.byMethodThisMonth;
-  let thisMonthBCA = tm?.BCA ?? 0;
-  let thisMonthDANA = tm?.DANA ?? 0;
-  let thisMonthSPAY = tm?.SPAY ?? 0;
-  let thisMonthQRIS = tm?.QRIS ?? 0;
+  /** ==== Today (timezone Asia/Jakarta) ==== */
+  const todayYMD = todayJakartaYMD();
+  const todaysTxCount = useMemo(
+    () =>
+      transactions.filter((t) => String(t.date).slice(0, 10) === todayYMD)
+        .length,
+    [transactions, todayYMD]
+  );
 
-  if (!tm) {
-    const acc = { BCA: 0, DANA: 0, SPAY: 0, QRIS: 0 } as Record<
-      "BCA" | "DANA" | "SPAY" | "QRIS",
-      number
-    >;
-    for (const tx of currentMonthTransactions) {
-      const method = (tx.payment_method || "").toUpperCase();
-      const r = getTxRevenue(tx);
-      if (method === "BCA") acc.BCA += r;
-      else if (method === "DANA") acc.DANA += r;
-      else if (method === "QRIS") acc.QRIS += r;
-      else if (method === "SPAY" || method === "SHOPEEPAY") acc.SPAY += r;
-    }
-    thisMonthBCA = acc.BCA;
-    thisMonthDANA = acc.DANA;
-    thisMonthSPAY = acc.SPAY;
-    thisMonthQRIS = acc.QRIS;
-  }
+  const todayRevenue =
+    metrics?.totals?.todayRevenue ??
+    transactions
+      .filter((t) => String(t.date).slice(0, 10) === todayYMD)
+      .reduce((sum, t) => sum + getTxRevenue(t), 0);
+
+  /** ==== NEW: Total per metode per bulan (fungsi utilitas terpusat) ==== */
+  const {
+    BCA: thisMonthBCA,
+    DANA: thisMonthDANA,
+    SPAY: thisMonthSPAY,
+    QRIS: thisMonthQRIS,
+  } = useMemo(
+    () => calculateMonthlyByMethod(metrics, currentMonthTransactions),
+    [metrics, currentMonthTransactions]
+  );
 
   return (
     <div className="grid gap-4">
@@ -245,24 +311,6 @@ export function RevenueStats({
         <>
           {/* Ringkasan utama */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {/* Total Revenue */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t("totalRevenue") ?? "Total Revenue"}
-                </CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatRupiah(totalRevenue)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("allTimeRevenue") ?? "All time"}
-                </p>
-              </CardContent>
-            </Card>
-
             {/* This Month Revenue */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -291,24 +339,20 @@ export function RevenueStats({
               </CardContent>
             </Card>
 
-            {/* Transactions count */}
+            {/* Total Revenue Today */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  {t("transactions") ?? "Transactions"}
+                  {t("totalRevenueToday") ?? "Total Revenue Today"}
                 </CardTitle>
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {totalTx > 0 ? totalTx : "-"}
+                  {formatRupiah(todayRevenue)}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {totalTx > 0
-                    ? `${currentMonthTransactions.length} ${
-                        (t("thisMonth") as string) || "this month"
-                      }`
-                    : t("allTimeRevenue") ?? "All time"}
+                  {t("revenueToday") ?? "Revenue Today"}
                 </p>
               </CardContent>
             </Card>
@@ -317,7 +361,7 @@ export function RevenueStats({
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Yesterday Revenue
+                  {t("totalRevenueYesterday") ?? "Total Revenue Yesterday"}
                 </CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -326,7 +370,26 @@ export function RevenueStats({
                   {formatRupiah(yesterdayRevenue)}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Pendapatan hari kemarin (bulan ini)
+                  {t("revenueYesterday") ?? "Revenue Yesterday"}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Transactions count (Today) */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {t("countTransactions") ?? "CountTransactions"}
+                </CardTitle>
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {todaysTxCount > 0 ? todaysTxCount : "-"}{" "}
+                  {t("transactions") ?? "Transactions"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("today") ?? "Today"}
                 </p>
               </CardContent>
             </Card>
