@@ -16,7 +16,7 @@ function DashboardLayoutInner({
 
   // state collapse di parent → konten ikut mengecil
   const [collapsed, setCollapsed] = useState(false);
-  const contentMl = collapsed ? "md:ml-16" : "md:ml-64";
+  const contentMl = collapsed ? "md:ml-28" : "md:ml-64";
 
   return (
     <div className="flex h-screen">

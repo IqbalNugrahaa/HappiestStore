@@ -60,7 +60,24 @@ export function DashboardSidebar({
     setMobileOpen(false);
   }, [pathname]);
 
-  const desktopWidth = collapsed ? "md:w-16" : "md:w-64";
+  useEffect(() => {
+    const handleCollapse = () => setCollapsed(true);
+    const handleExpand = () => setCollapsed(false);
+
+    // dengarkan event global
+    window.addEventListener("dash:collapse", handleCollapse as EventListener);
+    window.addEventListener("dash:expand", handleExpand as EventListener);
+
+    return () => {
+      window.removeEventListener(
+        "dash:collapse",
+        handleCollapse as EventListener
+      );
+      window.removeEventListener("dash:expand", handleExpand as EventListener);
+    };
+  }, []);
+
+  const desktopWidth = collapsed ? "md:w-28" : "md:w-64";
 
   return (
     <>
@@ -97,43 +114,40 @@ export function DashboardSidebar({
         )}
       >
         {/* Header */}
-        <Link href={"/dashboard"}>
-          <div className="relative flex h-16 items-center px-3 md:px-4">
-            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-indigo-500/30 via-blue-500/30 to-purple-500/30" />
-            <Image
-              src={logo}
-              alt="Logo"
-              className="mr-2 rounded-2xl"
-              width={40}
-              height={40}
-            />
-            <h1
-              className={cn(
-                "text-base font-semibold text-foreground transition-opacity",
-                collapsed ? "opacity-0 md:opacity-0 w-0" : "opacity-100"
-              )}
-            >
-              Happiest Store
-            </h1>
-
-            {/* Collapse toggle (desktop) */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="ml-auto hidden md:inline-flex"
-              onClick={() => setCollapsed(!collapsed)}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand" : "Collapse"}
-            >
-              {collapsed ? (
-                <ChevronRight className="h-5 w-5" />
-              ) : (
-                <ChevronLeft className="h-5 w-5" />
-              )}
-            </Button>
-          </div>
-        </Link>
+        <div className="relative flex h-16 items-center px-3 md:px-4">
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-indigo-500/30 via-blue-500/30 to-purple-500/30" />
+          <Image
+            src={logo}
+            alt="Logo"
+            className="mr-2 rounded-2xl"
+            width={40}
+            height={40}
+          />
+          <h1
+            className={cn(
+              "text-base font-semibold text-foreground transition-opacity",
+              collapsed ? "opacity-0 md:opacity-0 w-0" : "opacity-100"
+            )}
+          >
+            Happiest Store
+          </h1>
+          {/* Collapse toggle (desktop) */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="hidden md:flex mx-auto"
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-5 w-5" />
+            ) : (
+              <ChevronLeft className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
 
         {/* Navigation */}
         <ScrollArea className="flex-1 px-2 py-4">

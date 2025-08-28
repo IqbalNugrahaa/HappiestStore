@@ -107,8 +107,17 @@ function PaginationBar({
           "Loading…"
         ) : (
           <>
-            Page <span className="font-medium">{page}</span> of{" "}
-            <span className="font-medium">{totalPages}</span>
+            {/* Desktop: Page 1 of 15 */}
+            <span className="hidden md:inline">
+              Page <span className="font-medium">{page}</span> of{" "}
+              <span className="font-medium">{totalPages}</span>
+            </span>
+
+            {/* Mobile: 1/15 */}
+            <span className="inline md:hidden">
+              <span className="font-medium">{page}</span>/
+              <span className="font-medium">{totalPages}</span>
+            </span>
           </>
         )}
       </div>
@@ -165,8 +174,6 @@ export function TransactionsTable({
         tx.store_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [transactions, searchTerm]);
-
-  const totalRevenue = filtered.reduce((sum, tx) => sum + (tx.revenue || 0), 0);
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) return <ArrowUpDown className="h-4 w-4" />;
@@ -316,7 +323,10 @@ export function TransactionsTable({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => onEdit(tx)}
+                          onClick={() => {
+                            onEdit(tx);
+                            window.dispatchEvent(new Event("dash:collapse"));
+                          }}
                           disabled={isLoading}
                         >
                           <Edit className="h-4 w-4" />

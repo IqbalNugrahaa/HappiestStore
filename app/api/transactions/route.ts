@@ -19,13 +19,10 @@ const MONTHS = [
 // Helper: pastikan string tanggal "YYYY-MM-DD"
 function toDateOnly(input?: string): string | null {
   if (!input) return null;
-  // dukung ISO string juga
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) return null;
-  // pakai tanggal UTC → slice(0,10) hasil yyyy-mm-dd
   return d.toISOString().slice(0, 10);
 }
-
 function toNumber(n: any, fallback = 0): number {
   const num = Number(n);
   return Number.isFinite(num) ? num : fallback;
@@ -65,7 +62,6 @@ export async function GET(req: NextRequest) {
     if (Number.isFinite(num) && num >= 1 && num <= 12) {
       monthFilter = num;
     } else {
-      // coba dari nama bulan
       const idx = MONTHS.findIndex(
         (m) => m.toLowerCase() === trimmed.toLowerCase()
       );
@@ -80,32 +76,38 @@ export async function GET(req: NextRequest) {
     if (Number.isFinite(y)) yearFilter = y;
   }
 
-  // (opsional) ambil user untuk filter user_id jika RLS butuh
-  // const { data: { user } } = await supabase.auth.getUser();
+  // --- Base filter builder (hindari duplikasi) ---
+  const applyFilters = (qb: any) => {
+    qb = qb.is("deleted_at", null);
+    if (monthFilter !== null) qb = qb.eq("month", monthFilter);
+    if (yearFilter !== null) qb = qb.eq("year", yearFilter);
+    return qb;
+  };
 
-  let q = supabase
-    .from("transactions")
-    .select(
+  // 1) Ambil TOTAL TANPA PAGESIZE: gunakan HEAD count terpisah (tidak pakai .range)
+  const countQ = applyFilters(
+    supabase.from("transactions").select("id", { count: "exact", head: true })
+  );
+  const { count: totalAll, error: countError } = await countQ;
+  if (countError) {
+    return NextResponse.json({ error: countError.message }, { status: 400 });
+  }
+
+  // 2) Ambil DATA dengan paging
+  let dataQ = applyFilters(
+    supabase.from("transactions").select(
       `
-      id, date, item_purchased, customer_name, store_name,
-      payment_method, purchase_price, selling_price, revenue,
-      notes, month, year, created_at, updated_at
-    `,
-      { count: "exact" }
+        id, date, id_product, item_purchased, customer_name, store_name,
+        payment_method, purchase_price, selling_price, revenue,
+        notes, month, year, created_at, updated_at
+      `
     )
-    .is("deleted_at", null);
-
-  // if (user) q = q.eq("user_id", user.id); // ← aktifkan kalau perlu
-
-  if (monthFilter !== null) q = q.eq("month", monthFilter);
-  if (yearFilter !== null) q = q.eq("year", yearFilter);
-
-  // urutkan: primary by sortBy, secondary by created_at untuk stabil
-  q = q
+  )
     .order(sortBy, { ascending: sortOrder === "asc" })
-    .order("created_at", { ascending: false, nullsFirst: false });
+    .order("created_at", { ascending: false, nullsFirst: false })
+    .range(from, to);
 
-  const { data, count, error } = await q.range(from, to);
+  const { data, error } = await dataQ;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
@@ -114,8 +116,8 @@ export async function GET(req: NextRequest) {
     transactions: data ?? [],
     page,
     pageSize,
-    total: count ?? 0,
-    totalPages: Math.ceil((count ?? 0) / pageSize),
+    total: totalAll ?? 0, // ← total asli, TIDAK terpengaruh pagesize
+    totalPages: Math.max(1, Math.ceil((totalAll ?? 0) / pageSize)),
   });
 }
 

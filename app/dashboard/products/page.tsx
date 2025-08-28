@@ -242,44 +242,38 @@ export default function ProductsPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="manage" className="space-y-4">
-          <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <ProductsTable
-                  serverMode
-                  products={products}
-                  isLoading={isLoading}
-                  page={page}
-                  pageSize={pageSize}
-                  total={total}
-                  onPageChange={(p) => setPage(Math.max(1, p))}
-                  onPageSizeChange={(ps) => {
-                    setPageSize(ps);
-                    setPage(1);
-                  }}
-                  searchTerm={search}
-                  onSearchChange={(q) => {
-                    setSearch(q);
-                    setPage(1);
-                  }}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSort={(field) => {
-                    if (sortField === field)
-                      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
-                    else {
-                      setSortField(field as keyof Product);
-                      setSortOrder("asc");
-                    }
-                  }}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <div className="overflow-x-auto">
+          <ProductsTable
+            serverMode
+            products={products}
+            isLoading={isLoading}
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={(p) => setPage(Math.max(1, p))}
+            onPageSizeChange={(ps) => {
+              setPageSize(ps);
+              setPage(1);
+            }}
+            searchTerm={search}
+            onSearchChange={(q) => {
+              setSearch(q);
+              setPage(1);
+            }}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSort={(field) => {
+              if (sortField === field)
+                setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+              else {
+                setSortField(field as keyof Product);
+                setSortOrder("asc");
+              }
+            }}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        </div>
 
         <TabsContent value="bulk" className="space-y-4">
           <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">

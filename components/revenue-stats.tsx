@@ -385,7 +385,7 @@ export function RevenueStats({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {todaysTxCount > 0 ? todaysTxCount : "-"}{" "}
+                  {todaysTxCount > 0 ? todaysTxCount : 0}{" "}
                   {t("transactions") ?? "Transactions"}
                 </div>
                 <p className="text-xs text-muted-foreground">

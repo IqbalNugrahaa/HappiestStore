@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 interface Transaction {
   id: string;
   date: string;
+  id_product?: string | null;
   item_purchased: string;
   customer_name?: string;
   store_name?: string;
@@ -297,14 +298,20 @@ export default function RevenuePage() {
           <Button
             variant="outline"
             className="border-indigo-200/60 hover:bg-indigo-50 dark:hover:bg-white/10"
-            onClick={() => setShowCSVUpload(true)}
+            onClick={() => {
+              setShowCSVUpload(true);
+              window.dispatchEvent(new Event("dash:collapse"));
+            }}
           >
             <Upload className="mr-2 h-4 w-4" />
             {t("csvUpload")}
           </Button>
           <Button
             className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 text-white hover:opacity-90"
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true);
+              window.dispatchEvent(new Event("dash:collapse"));
+            }}
           >
             <Plus className="mr-2 h-4 w-4" />
             {t("addTransaction")}
@@ -324,30 +331,26 @@ export default function RevenuePage() {
       </Card>
 
       {/* TABLE */}
-      <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <TransactionsTable
-              serverMode
-              transactions={transactions}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onSort={handleSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              isLoading={isLoading}
-              page={page}
-              pageSize={pageSize}
-              total={total}
-              onPageChange={(p) => setPage(Math.max(1, p))}
-              onPageSizeChange={(ps) => {
-                setPageSize(ps);
-                setPage(1);
-              }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="overflow-x-auto">
+        <TransactionsTable
+          serverMode
+          transactions={transactions}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onSort={handleSort}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          isLoading={isLoading}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p) => setPage(Math.max(1, p))}
+          onPageSizeChange={(ps) => {
+            setPageSize(ps);
+            setPage(1);
+          }}
+        />
+      </div>
 
       {/* CSV Upload Modal */}
       <Dialog open={showCSVUpload} onOpenChange={setShowCSVUpload}>
