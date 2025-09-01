@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +28,7 @@ interface Product {
   name: string;
   type: string; // API shape (lowercase, e.g. "sharing 8u", "edukasi")
   price: number;
+  store: string; // <-- NEW (mandatory in form)
   created_at?: string;
 }
 
@@ -81,9 +81,12 @@ const API_TO_DISPLAY: Record<string, DisplayType> = {
 const DISPLAY_TO_API: Record<DisplayType, string> = Object.entries(
   API_TO_DISPLAY
 ).reduce((acc, [api, disp]) => {
-  acc[disp] = api;
+  acc[disp as DisplayType] = api;
   return acc;
 }, {} as Record<DisplayType, string>);
+
+/** Store options */
+const STORE_OPTIONS = ["Happiest Store", "BB Store"] as const;
 
 export function ProductForm({
   product,
@@ -107,11 +110,18 @@ export function ProductForm({
     /** store DISPLAY value in the form; convert to API at submit */
     type: defaultDisplayType,
     price: product?.price || 0,
+    store: product?.store ?? "", // <-- NEW
   });
+
+  const isSubmitDisabled =
+    isLoading ||
+    !formData.name.trim() ||
+    formData.price <= 0 ||
+    !formData.store; // <-- make store mandatory
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || formData.price <= 0) return;
+    if (isSubmitDisabled) return;
 
     // Convert display value back to API value before submit
     const apiType =
@@ -121,6 +131,7 @@ export function ProductForm({
       name: formData.name.trim(),
       type: apiType,
       price: formData.price,
+      store: formData.store, // <-- include in payload
     });
   };
 
@@ -172,6 +183,30 @@ export function ProductForm({
             </Select>
           </div>
 
+          {/* STORE - mandatory */}
+          <div className="space-y-2">
+            <Label htmlFor="store">Store</Label>
+            <Select
+              value={formData.store}
+              onValueChange={(store) => setFormData({ ...formData, store })}
+              disabled={isLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select store (required)" />
+              </SelectTrigger>
+              <SelectContent>
+                {STORE_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!formData.store && (
+              <p className="text-xs text-red-500">Store is required.</p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="price">{t("price")}</Label>
             <CurrencyInput
@@ -183,12 +218,7 @@ export function ProductForm({
           </div>
 
           <div className="flex gap-2 pt-4">
-            <Button
-              type="submit"
-              disabled={
-                isLoading || !formData.name.trim() || formData.price <= 0
-              }
-            >
+            <Button type="submit" disabled={isSubmitDisabled}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("save")}
             </Button>

@@ -17,6 +17,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import Swal from "sweetalert2";
 
 interface Transaction {
   id: string;
@@ -44,6 +45,7 @@ type RevenueApiData = {
     prevMonthRevenue: number;
     yesterdayRevenueThisMonth?: number;
     todayRevenue?: number; // NEW
+    todaysTxCount?: number;
   };
   averages?: {
     thisMonthAverageRevenue: number; // NEW
@@ -183,6 +185,10 @@ export default function RevenuePage() {
 
   const handleSubmit = async (transactionData: Omit<Transaction, "id">) => {
     setIsSubmitting(true);
+
+    // (opsional) tampilkan loading modal
+    // Swal.fire({ title: "Saving...", allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
     try {
       const url = editingTransaction
         ? `/api/transactions/${editingTransaction.id}`
@@ -201,41 +207,55 @@ export default function RevenuePage() {
         let msg = "Failed to save transaction";
         try {
           const err = await response.json();
-          msg = err.error || msg;
-          console.warn("Supabase details:", err.details);
+          msg = err?.error || err?.message || msg;
+          console.warn("Supabase details:", err?.details);
         } catch {}
         throw new Error(msg);
       }
 
-      toast({
+      await Swal.fire({
+        icon: "success",
         title: "Success",
-        description: `Transaction ${
+        text: `Transaction ${
           editingTransaction ? "updated" : "created"
         } successfully`,
+        timer: 1600,
+        showConfirmButton: false,
       });
 
       setShowForm(false);
       setEditingTransaction(null);
-      await Promise.all([fetchTransactions(), fetchRevenue()]); // refresh keduanya
+      await Promise.all([fetchTransactions(), fetchRevenue()]);
     } catch (error) {
       console.error("Error saving transaction:", error);
-      toast({
+      await Swal.fire({
+        icon: "error",
         title: "Error",
-        description:
+        text:
           error instanceof Error ? error.message : "Failed to save transaction",
-        variant: "destructive",
       });
     } finally {
+      // Swal.close(); // kalau kamu pakai loading modal di atas, aktifkan baris ini
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string | number) => {
-    if (!confirm("Are you sure you want to delete this transaction?")) return;
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: "Delete this transaction?",
+      text: "This action cannot be undone.",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#d33",
+    });
+
+    if (!isConfirmed) return;
 
     try {
       const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-      const payload = await res.json().catch(() => ({}));
+      const payload = await res.json().catch(() => ({} as any));
 
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to delete transaction");
@@ -245,23 +265,26 @@ export default function RevenuePage() {
         prev.filter((tx) => String(tx.id) !== String(id))
       );
 
-      toast({
+      await Swal.fire({
+        icon: "success",
         title: "Success",
-        description: `Transaction deleted${
+        text: `Transaction deleted${
           payload?.deletedCount ? ` (${payload.deletedCount})` : ""
         }`,
+        timer: 1400,
+        showConfirmButton: false,
       });
 
       await Promise.all([fetchTransactions(), fetchRevenue()]);
     } catch (error) {
       console.error("Error deleting transaction:", error);
-      toast({
+      await Swal.fire({
+        icon: "error",
         title: "Error",
-        description:
+        text:
           error instanceof Error
             ? error.message
             : "Failed to delete transaction",
-        variant: "destructive",
       });
     }
   };
@@ -311,6 +334,7 @@ export default function RevenuePage() {
             onClick={() => {
               setShowForm(true);
               window.dispatchEvent(new Event("dash:collapse"));
+              setEditingTransaction(null);
             }}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -368,9 +392,9 @@ export default function RevenuePage() {
             onUploadComplete={() => {
               setShowCSVUpload(false);
               // kalau perlu refresh data, panggil di sini
-              // refetchTransactions();
+              fetchTransactions();
             }}
-            onCancel={() => setShowCSVUpload(false)}
+            onCancel={handleCancel}
           />
         </DialogContent>
       </Dialog>
@@ -405,7 +429,7 @@ export default function RevenuePage() {
                 await handleSubmit(payload);
                 setShowForm(false);
               }}
-              onCancel={() => setShowForm(false)}
+              onCancel={handleCancel}
               isLoading={isSubmitting}
             />
           </div>

@@ -16,7 +16,44 @@ const MONTHS = [
   "December",
 ];
 
-// Helper: pastikan string tanggal "YYYY-MM-DD"
+// Helper: YYYY-MM-DD di Asia/Jakarta  // NEW
+function todayJakartaYMD() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year")!.value;
+  const m = parts.find((p) => p.type === "month")!.value;
+  const d = parts.find((p) => p.type === "day")!.value;
+  return `${y}-${m}-${d}`;
+}
+
+// (opsional) jika kolom `date` bertipe timestamp, pakai rentang hari (Asia/Jakarta)  // NEW
+function todayJakartaRangeISO() {
+  const tz = "Asia/Jakarta";
+  const now = new Date();
+  // Dapatkan awal & akhir hari ini di Asia/Jakarta, lalu konversi ke ISO UTC
+  const startStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(now));
+  const y = startStr.find((p) => p.type === "year")!.value;
+  const m = startStr.find((p) => p.type === "month")!.value;
+  const d = startStr.find((p) => p.type === "day")!.value;
+  const startLocal = new Date(`${y}-${m}-${d}T00:00:00+07:00`);
+  const endLocal = new Date(`${y}-${m}-${d}T23:59:59.999+07:00`);
+  return { startISO: startLocal.toISOString(), endISO: endLocal.toISOString() };
+}
+
+// Helper existing
 function toDateOnly(input?: string): string | null {
   if (!input) return null;
   const d = new Date(input);
@@ -32,10 +69,9 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
 
-  const monthRaw = searchParams.get("month"); // bisa "8" atau "August"
+  const monthRaw = searchParams.get("month");
   const yearRaw = searchParams.get("year");
 
-  // sort
   const sortBy = (searchParams.get("sortBy") ?? "date") as
     | "date"
     | "item_purchased"
@@ -48,7 +84,6 @@ export async function GET(req: NextRequest) {
     | "updated_at";
   const sortOrder = (searchParams.get("sortOrder") ?? "desc") as "asc" | "desc";
 
-  // paging
   const page = Number(searchParams.get("page") ?? "1");
   const pageSize = Number(searchParams.get("pageSize") ?? "10");
   const from = (page - 1) * pageSize;
@@ -59,9 +94,8 @@ export async function GET(req: NextRequest) {
   if (monthRaw) {
     const trimmed = monthRaw.trim();
     const num = Number(trimmed);
-    if (Number.isFinite(num) && num >= 1 && num <= 12) {
-      monthFilter = num;
-    } else {
+    if (Number.isFinite(num) && num >= 1 && num <= 12) monthFilter = num;
+    else {
       const idx = MONTHS.findIndex(
         (m) => m.toLowerCase() === trimmed.toLowerCase()
       );
@@ -76,7 +110,7 @@ export async function GET(req: NextRequest) {
     if (Number.isFinite(y)) yearFilter = y;
   }
 
-  // --- Base filter builder (hindari duplikasi) ---
+  // builder filter base
   const applyFilters = (qb: any) => {
     qb = qb.is("deleted_at", null);
     if (monthFilter !== null) qb = qb.eq("month", monthFilter);
@@ -84,7 +118,7 @@ export async function GET(req: NextRequest) {
     return qb;
   };
 
-  // 1) Ambil TOTAL TANPA PAGESIZE: gunakan HEAD count terpisah (tidak pakai .range)
+  // === (1) TOTAL GLOBAL (tanpa pagesize) ===
   const countQ = applyFilters(
     supabase.from("transactions").select("id", { count: "exact", head: true })
   );
@@ -93,15 +127,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: countError.message }, { status: 400 });
   }
 
-  // 2) Ambil DATA dengan paging
+  // === (2) TOTAL TRANSAKSI HARI INI (tanpa pagesize) ===  // NEW
+  const todayYMD = todayJakartaYMD();
+
+  // Jika kolom `date` kamu bertipe DATE atau TEXT 'YYYY-MM-DD':
+  const todayCountQ = applyFilters(
+    supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("date", todayYMD) // <— langsung cocokkan YMD
+  );
+
+  // Jika kolom `date` kamu bertipe TIMESTAMP, ganti blok di atas dengan rentang waktu:
+  // const { startISO, endISO } = todayJakartaRangeISO();
+  // const todayCountQ = applyFilters(
+  //   supabase
+  //     .from("transactions")
+  //     .select("id", { count: "exact", head: true })
+  //     .gte("date", startISO)
+  //     .lte("date", endISO)
+  // );
+
+  const { count: todaysTxCount, error: todayCountErr } = await todayCountQ;
+  if (todayCountErr) {
+    return NextResponse.json({ error: todayCountErr.message }, { status: 400 });
+  }
+
+  // === (3) DATA BER-PAGING ===
   let dataQ = applyFilters(
-    supabase.from("transactions").select(
-      `
-        id, date, id_product, item_purchased, customer_name, store_name,
-        payment_method, purchase_price, selling_price, revenue,
-        notes, month, year, created_at, updated_at
-      `
-    )
+    supabase.from("transactions").select(`
+      id, date, id_product, item_purchased, customer_name, store_name,
+      payment_method, purchase_price, selling_price, revenue,
+      notes, month, year, created_at, updated_at
+    `)
   )
     .order(sortBy, { ascending: sortOrder === "asc" })
     .order("created_at", { ascending: false, nullsFirst: false })
@@ -116,8 +174,10 @@ export async function GET(req: NextRequest) {
     transactions: data ?? [],
     page,
     pageSize,
-    total: totalAll ?? 0, // ← total asli, TIDAK terpengaruh pagesize
+    total: totalAll ?? 0,
     totalPages: Math.max(1, Math.ceil((totalAll ?? 0) / pageSize)),
+    // NEW: kirim total transaksi hari ini (Asia/Jakarta), tidak terpengaruh pagesize
+    todaysTxCount: todaysTxCount ?? 0,
   });
 }
 

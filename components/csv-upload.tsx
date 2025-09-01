@@ -34,6 +34,7 @@ import {
 import { parseCSV, type CSVRow } from "@/lib/csv-parser";
 import { findBestMatch, type ProductMatch } from "@/lib/fuzzy-match";
 import { formatRupiah } from "@/lib/currency";
+import Swal from "sweetalert2";
 
 interface CSVUploadProps {
   onUploadComplete: () => void;
@@ -202,10 +203,10 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
     const selectedRows = csvData.filter((row) => row.selected);
 
     if (selectedRows.length === 0) {
-      toast({
+      await Swal.fire({
+        icon: "error",
         title: t("error"),
-        description: "Please select at least one transaction to upload",
-        variant: "destructive",
+        text: "Please select at least one transaction to upload",
       });
       return;
     }
@@ -214,10 +215,12 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
 
     try {
       const transactions = selectedRows.map((row) => {
-        const transactionDate = new Date(row.date);
+        const d = new Date(row.date);
         const matchedProduct = row.matchedProduct;
-        const sellingPrice = matchedProduct ? matchedProduct.price : 0;
-        const purchasePrice = row.purchasePrice;
+        const sellingPrice = matchedProduct
+          ? Number(matchedProduct.price) || 0
+          : 0;
+        const purchasePrice = Number(row.purchasePrice) || 0;
         const revenue = sellingPrice - purchasePrice;
 
         return {
@@ -231,35 +234,45 @@ export function CSVUpload({ onUploadComplete, onCancel }: CSVUploadProps) {
           product_id: matchedProduct ? matchedProduct.id : null,
           revenue,
           notes: row.notes,
-          month: transactionDate.getMonth() + 1,
-          year: transactionDate.getFullYear(),
+          month: d.getMonth() + 1,
+          year: d.getFullYear(),
         };
       });
 
-      const response = await fetch("/api/transactions/bulk", {
+      const res = await fetch("/api/transactions/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transactions }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to upload transactions");
+      let payload: any = null;
+      try {
+        payload = await res.json();
+      } catch {}
+
+      if (!res.ok) {
+        const msg =
+          payload?.error ||
+          payload?.message ||
+          `Failed to upload transactions (HTTP ${res.status})`;
+        await Swal.fire({ icon: "error", title: t("error"), text: msg });
+        return;
       }
 
-      toast({
+      const okCount = payload?.inserted ?? selectedRows.length;
+      await Swal.fire({
+        icon: "success",
         title: t("success"),
-        description: `${selectedRows.length} transactions uploaded successfully`,
+        text: `${okCount} transactions uploaded successfully`,
+        timer: 1800,
+        showConfirmButton: false,
       });
 
-      onUploadComplete();
-    } catch (error) {
-      console.error("Error uploading transactions:", error);
-      toast({
-        title: t("error"),
-        description: error instanceof Error ? error.message : t("uploadError"),
-        variant: "destructive",
-      });
+      onUploadComplete?.();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("uploadError");
+      console.error("Error uploading transactions:", err);
+      await Swal.fire({ icon: "error", title: t("error"), text: msg });
     } finally {
       setIsUploading(false);
     }

@@ -22,40 +22,98 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
 
-  const page = Number(searchParams.get("page") || 1);
-  const pageSize = Number(searchParams.get("pageSize") || 10);
-  const all = searchParams.get("all") === "1";
-  const search = (searchParams.get("search") || "").trim();
+  // ---------- Query params ----------
+  const rawPage = Number(searchParams.get("page") ?? 1);
+  const rawPageSize = Number(searchParams.get("pageSize") ?? 10);
+  const all = (searchParams.get("all") ?? "") === "1";
+  const search = (searchParams.get("search") ?? "").trim();
+  const store = (searchParams.get("store") ?? "").trim();
 
-  const allowedSort = new Set([
+  const allowedSort = [
     "created_at",
     "name",
     "type",
     "price",
     "updated_at",
-  ]);
-  const sortFieldRaw = (searchParams.get("sortField") || "created_at").trim();
-  const sortField = allowedSort.has(sortFieldRaw) ? sortFieldRaw : "created_at";
-  const sortOrder = (searchParams.get("sortOrder") || "desc") as "asc" | "desc";
+  ] as const;
+  type SortField = (typeof allowedSort)[number];
+  const sortFieldRaw = (searchParams.get("sortField") ?? "created_at").trim();
+  const sortField: SortField = (allowedSort as readonly string[]).includes(
+    sortFieldRaw
+  )
+    ? (sortFieldRaw as SortField)
+    : "created_at";
+  const sortOrder: "asc" | "desc" =
+    (searchParams.get("sortOrder") ?? "desc").toLowerCase() === "asc"
+      ? "asc"
+      : "desc";
 
-  let q = supabase
-    .from("products")
-    .select("*", { count: "exact" })
-    .is("deleted_at", null);
+  const page =
+    Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  const pageSizeUnchecked =
+    Number.isFinite(rawPageSize) && rawPageSize > 0
+      ? Math.floor(rawPageSize)
+      : 10;
+  const pageSize = Math.min(pageSizeUnchecked, 1000);
 
-  if (search) {
-    q = q.or(`name.ilike.%${search}%,type.ilike.%${search}%`);
+  // ---------- Builder dasar ----------
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const buildBase = () => {
+    let q = supabase
+      .from("products")
+      .select("*", { count: all ? undefined : "exact" })
+      .is("deleted_at", null);
+
+    if (search) {
+      q = q.or(`name.ilike.%${search}%,type.ilike.%${search}%`);
+    }
+
+    q = q.order(sortField, { ascending: sortOrder === "asc" });
+
+    if (!all) {
+      q = q.range(from, to);
+    }
+    return q;
+  };
+
+  // ---------- Eksekusi dengan filter store + fallback kolom ----------
+  async function runWithStore(qBase: ReturnType<typeof buildBase>) {
+    if (!store || store.toUpperCase() === "OTHER") {
+      return qBase;
+    }
+    // Coba kolom 'store' dulu (case-insensitive exact match).
+    let q = qBase.ilike("store", store);
+    let { data, error, count } = await q;
+    // Jika kolom 'store' tidak ada, coba 'store_name'
+    if (
+      error &&
+      (error.code === "42703" ||
+        /column.*store.*does not exist/i.test(error.message))
+    ) {
+      q = qBase.ilike("store_name", store);
+      const res2 = await q;
+      return res2;
+    }
+    return { data, error, count };
   }
 
-  q = q.order(sortField, { ascending: sortOrder === "asc" });
+  const qBase = buildBase();
+  const execRes = await runWithStore(qBase);
 
-  if (!all) {
-    q = q.range((page - 1) * pageSize, page * pageSize - 1);
-  }
+  // Jika runWithStore mengembalikan QueryBuilder (mis. tanpa store filter), eksekusi sekarang
+  const res =
+    "data" in execRes && "error" in execRes
+      ? execRes
+      : await (execRes as ReturnType<typeof buildBase>);
 
-  const { data, error, count } = await q;
-  if (error)
+  const { data, error, count } = res;
+
+  if (error) {
+    // Error lain (bukan karena kolom store/store_name): kirim 400 apa adanya
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
 
   const total = all ? data?.length ?? 0 : count ?? 0;
   return NextResponse.json({ products: data ?? [], total });

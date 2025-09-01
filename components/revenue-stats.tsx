@@ -42,6 +42,7 @@ export type RevenueApiData = {
     prevMonthRevenue: number;
     yesterdayRevenueThisMonth?: number;
     todayRevenue?: number;
+    todaysTxCount?: number;
   };
   averages?: {
     thisMonthAverageRevenue: number;
@@ -270,12 +271,13 @@ export function RevenueStats({
 
   /** ==== Today (timezone Asia/Jakarta) ==== */
   const todayYMD = todayJakartaYMD();
-  const todaysTxCount = useMemo(
-    () =>
-      transactions.filter((t) => String(t.date).slice(0, 10) === todayYMD)
-        .length,
-    [transactions, todayYMD]
-  );
+  const todaysTxCount = useMemo(() => {
+    if (typeof metrics?.totals?.todaysTxCount === "number") {
+      return metrics.totals.todaysTxCount;
+    }
+    return transactions.filter((t) => String(t.date).slice(0, 10) === todayYMD)
+      .length;
+  }, [metrics, transactions, todayYMD]);
 
   const todayRevenue =
     metrics?.totals?.todayRevenue ??

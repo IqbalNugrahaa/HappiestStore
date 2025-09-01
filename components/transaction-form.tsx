@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/currency-input";
 import { useLanguage } from "@/components/language-provider";
-import { Loader2, ChevronsUpDown, Check } from "lucide-react";
+import { Loader2, ChevronsUpDown, Check, Store } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -41,6 +41,8 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  /** optional: jika API mengembalikan informasi store */
+  store_name?: string;
 }
 
 interface Transaction {
@@ -77,7 +79,7 @@ function formatIDR(n?: number) {
   }).format(n);
 }
 
-const OTHER_ID = "__OTHER__"; // ← penanda opsi custom
+const OTHER_ID = "__OTHER__";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -86,7 +88,6 @@ function todayDateOnly(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
-/** Terima: "YYYY-MM-DD" atau ISO apa saja → kembalikan "YYYY-MM-DD" tanpa toISOString */
 function dateOnlyFromAny(input?: string): string {
   const s = (input || "").trim();
   if (!s) return todayDateOnly();
@@ -96,15 +97,12 @@ function dateOnlyFromAny(input?: string): string {
   if (isNaN(d.getTime())) return todayDateOnly();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
-/** Ambil {year, month} dari "YYYY-MM-DD" tanpa Date() supaya tidak terkena UTC */
 function ymFromDateOnly(dateOnly: string): { year: number; month: number } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
   if (m) return { year: Number(m[1]), month: Number(m[2]) };
   const d = new Date(dateOnly);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
-
-/** Helper untuk hitung revenue secara konsisten */
 const toNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const computeRevenue = (selling: any, purchase: any) =>
   toNum(selling) - toNum(purchase);
@@ -117,6 +115,7 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const { t } = useLanguage();
 
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
@@ -156,20 +155,24 @@ export function TransactionForm({
 
   const canSubmit = !isLoading && priceValid && hasItem;
 
-  // Debounce pencarian produk (opsional)
+  // Debounce search
   useEffect(() => {
     const h = setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => clearTimeout(h);
   }, [search]);
 
-  // Load products
+  // Fetch products (optionally filtered by store on the server)
   useEffect(() => {
     let mounted = true;
 
-    async function fetchAllProducts(q: string) {
+    async function fetchAllProducts(q: string, store?: string) {
       try {
-        if (cacheRef.current.has(q)) {
-          if (mounted) setProducts(cacheRef.current.get(q) || []);
+        const cacheKey = `${q}__${store || ""}`;
+        if (cacheRef.current.has(cacheKey)) {
+          if (mounted) {
+            const cached = cacheRef.current.get(cacheKey) || [];
+            setAllProducts(cached);
+          }
           return;
         }
 
@@ -178,9 +181,11 @@ export function TransactionForm({
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const fastUrl = q
-          ? `/api/products?all=1&search=${encodeURIComponent(q)}`
-          : `/api/products?all=1`;
+        // coba hit endpoint fast path dengan filter store
+        const qs = new URLSearchParams({ all: "1" });
+        if (q) qs.set("search", q);
+        if (store) qs.set("store", store);
+        const fastUrl = `/api/products?${qs.toString()}`;
 
         let res = await fetch(fastUrl, {
           signal: controller.signal,
@@ -193,6 +198,7 @@ export function TransactionForm({
           const json = await res.json();
           items = json?.products ?? [];
         } else {
+          // fallback pagination (tanpa filter server), nanti kita filter client-side
           items = [];
           const pageSize = 1000;
           for (let page = 1; ; page++) {
@@ -202,40 +208,53 @@ export function TransactionForm({
                   q
                 )}&page=${page}&pageSize=${pageSize}`
               : `/api/products?page=${page}&pageSize=${pageSize}`;
-
             res = await fetch(url, {
               signal: controller.signal,
               credentials: "same-origin",
               headers: { Accept: "application/json" },
             });
             if (!res.ok) break;
-
             const { products = [] } = await res.json();
             items.push(...products);
             if (products.length < pageSize) break;
           }
         }
 
-        const list = items.map((p: any) => ({
+        const list: Product[] = items.map((p: any) => ({
           id: p.id,
           name: p.name,
           price: Number(p.price) || 0,
+          store_name: p.store_name, // jika tersedia
         }));
 
-        cacheRef.current.set(q, list);
-        if (mounted) setProducts(list);
+        cacheRef.current.set(`${q}__${store || ""}`, list);
+        if (mounted) setAllProducts(list);
       } catch (_err) {
-        if (mounted) setProducts([]);
+        if (mounted) setAllProducts([]);
       } finally {
         if (mounted) setProductsLoading(false);
       }
     }
 
-    fetchAllProducts(debouncedSearch);
+    fetchAllProducts(debouncedSearch, formData.store_name || undefined);
     return () => {
       mounted = false;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, formData.store_name]);
+
+  // Client-side filter by store if API belum mendukung filter store
+  useEffect(() => {
+    const store = formData.store_name?.trim();
+    if (!store) {
+      // belum pilih store: kosongkan list agar memaksa pilih store dulu
+      setProducts([]);
+      return;
+    }
+    const filtered = allProducts.filter(
+      (p) => !p.store_name || p.store_name === store
+    );
+    setProducts(filtered);
+  }, [allProducts, formData.store_name]);
 
   // Keep month/year in sync with date
   useEffect(() => {
@@ -248,6 +267,19 @@ export function TransactionForm({
       }));
     }
   }, [formData.date]);
+
+  // Reset pilihan item saat store berganti (hindari mismatch)
+  useEffect(() => {
+    if (formData.id_product === null) {
+      setFormData((prev) => ({
+        ...prev,
+        id_product: null,
+        item_purchased: "",
+        is_custom_item: false,
+        // selling & revenue tidak diubah; user bisa isi manual/otomatis setelah pilih item
+      }));
+    }
+  }, [formData.store_name]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,7 +300,6 @@ export function TransactionForm({
         return;
     }
 
-    // Pastikan revenue konsisten saat submit
     const finalRevenue = computeRevenue(
       formData.selling_price,
       formData.purchase_price
@@ -280,7 +311,7 @@ export function TransactionForm({
         : formData.id_product ?? undefined,
       is_custom_item: formData.is_custom_item,
       date: formData.date,
-      item_purchase: formData.item_purchased.trim(), // snake_case untuk API
+      item_purchase: formData.item_purchased.trim(),
       customer_name: formData.customer_name.trim() || undefined,
       store_name: formData.store_name || undefined,
       payment_method: formData.payment_method || undefined,
@@ -302,6 +333,8 @@ export function TransactionForm({
       ? products.find((p) => p.id === formData.id_product) ?? null
       : null;
 
+  const storeChosen = !!formData.store_name;
+
   return (
     <Card>
       <CardHeader>
@@ -309,9 +342,9 @@ export function TransactionForm({
           {transaction ? "Edit Transaction" : t("addTransaction")}
         </CardTitle>
         <CardDescription>
-          {transaction
-            ? "Update transaction information"
-            : "Add a new revenue transaction"}
+          {/* langkah: pilih store → pilih item */}
+          Pilih <strong>Store</strong> terlebih dahulu, lalu pilih{" "}
+          <strong>Item Purchase</strong>.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -330,49 +363,93 @@ export function TransactionForm({
               />
             </div>
 
-            {/* Item Purchase -> Combobox Searchable from Products + Other/Custom */}
+            {/* Store Name (Wajib pilih dahulu) */}
             <div className="space-y-2">
-              <Label htmlFor="item_purchase">Item Purchase *</Label>
+              <Label htmlFor="store_name">
+                Store Name <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={formData.store_name}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, store_name: value })
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder="Select store"
+                    aria-label="Select store first"
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HAPPIEST STORE">HAPPIEST STORE</SelectItem>
+                  <SelectItem value="BB STORE">BB STORE</SelectItem>
+                </SelectContent>
+              </Select>
+              {!storeChosen && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <Store className="h-3.5 w-3.5" />
+                  Pilih store terlebih dahulu untuk menampilkan daftar item.
+                  Opsi “Other (custom)” tetap tersedia.
+                </p>
+              )}
+            </div>
+          </div>
 
-              <Popover open={productOpen} onOpenChange={setProductOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={productOpen}
-                    // penting: cegah overflow & beri ruang ke teks untuk truncate
-                    className="w-full justify-between overflow-hidden"
-                    disabled={isLoading}
-                  >
-                    <span className="truncate min-w-0 flex-1 text-left">
-                      {formData.is_custom_item
-                        ? formData.item_purchased ||
-                          "Other (custom) — type item"
-                        : selectedProduct
-                        ? `${selectedProduct.name} — ${formatIDR(
-                            selectedProduct.price
-                          )}`
-                        : formData.item_purchased || "Select product"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
+          {/* Item Purchase */}
+          <div className="space-y-2">
+            <Label htmlFor="item_purchase">Item Purchase *</Label>
 
-                {/* lebar responsif: penuh di mobile, 360px di >=sm */}
-                <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[360px]">
-                  <Command>
-                    <CommandInput
-                      placeholder="Search product..."
-                      value={search}
-                      onValueChange={setSearch}
-                    />
-                    <CommandEmpty>
-                      {productsLoading ? "Loading..." : "No product found."}
-                    </CommandEmpty>
+            <Popover open={productOpen} onOpenChange={setProductOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={productOpen}
+                  className="w-full justify-between overflow-hidden"
+                  disabled={isLoading}
+                >
+                  <span className="truncate min-w-0 flex-1 text-left">
+                    {formData.is_custom_item
+                      ? formData.item_purchased || "Other (custom) — type item"
+                      : selectedProduct
+                      ? `${selectedProduct.name} — ${formatIDR(
+                          selectedProduct.price
+                        )}`
+                      : storeChosen
+                      ? "Select product"
+                      : "Select store first or choose Other"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
 
-                    <CommandGroup>
-                      {products.map((p) => {
+              <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[360px]">
+                <Command>
+                  {/* Jika belum pilih store, nonaktifkan input search agar jelas alurnya */}
+                  <CommandInput
+                    placeholder={
+                      storeChosen
+                        ? "Search product..."
+                        : "Select store first..."
+                    }
+                    value={storeChosen ? search : ""}
+                    onValueChange={storeChosen ? setSearch : () => {}}
+                    disabled={!storeChosen}
+                  />
+                  <CommandEmpty>
+                    {productsLoading
+                      ? "Loading..."
+                      : storeChosen
+                      ? "No product found."
+                      : "Select store to see products."}
+                  </CommandEmpty>
+
+                  <CommandGroup>
+                    {/* Tampilkan produk hanya jika store sudah dipilih */}
+                    {storeChosen &&
+                      products.map((p) => {
                         const selected =
                           !formData.is_custom_item &&
                           p.id === formData.id_product;
@@ -403,8 +480,6 @@ export function TransactionForm({
                             <div className="h-4 w-4 flex items-center justify-center shrink-0">
                               {selected ? <Check className="h-4 w-4" /> : null}
                             </div>
-
-                            {/* batasi jadi satu baris + elipsis di mobile */}
                             <div className="flex flex-col min-w-0">
                               <span className="font-medium truncate">
                                 {p.name}
@@ -417,62 +492,61 @@ export function TransactionForm({
                         );
                       })}
 
-                      <CommandItem
-                        key={OTHER_ID}
-                        value="other custom manual"
-                        onSelect={() => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            is_custom_item: true,
-                            id_product: null,
-                            item_purchased: prev.item_purchased || "",
-                            selling_price: toNum(prev.selling_price),
-                            revenue: computeRevenue(
-                              prev.selling_price,
-                              prev.purchase_price
-                            ),
-                          }));
-                          setProductOpen(false);
-                        }}
-                        className="gap-2"
-                      >
-                        <div className="h-4 w-4 shrink-0" />
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-medium truncate">
-                            Other (custom)
-                          </span>
-                          <span className="text-xs opacity-70 truncate">
-                            Type item name & price manually
-                          </span>
-                        </div>
-                      </CommandItem>
-                    </CommandGroup>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                    {/* Other (selalu ada walau store belum dipilih) */}
+                    <CommandItem
+                      key={OTHER_ID}
+                      value="other custom manual"
+                      onSelect={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          is_custom_item: true,
+                          id_product: null,
+                          item_purchased: prev.item_purchased || "",
+                          selling_price: toNum(prev.selling_price),
+                          revenue: computeRevenue(
+                            prev.selling_price,
+                            prev.purchase_price
+                          ),
+                        }));
+                        setProductOpen(false);
+                      }}
+                      className="gap-2"
+                    >
+                      <div className="h-4 w-4 shrink-0" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-medium truncate">
+                          Other (custom)
+                        </span>
+                        <span className="text-xs opacity-70 truncate">
+                          Type item name & price manually
+                        </span>
+                      </div>
+                    </CommandItem>
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
-              {/* Field khusus saat memilih Other/Custom */}
-              {formData.is_custom_item && (
-                <div className="mt-2">
-                  <Input
-                    id="custom_item_name"
-                    placeholder="Type custom item name..."
-                    value={formData.item_purchased}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        item_purchased: e.target.value,
-                      })
-                    }
-                    disabled={isLoading}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    This will be saved as <strong>item_purchased</strong>{" "}
-                    without linking to a product.
-                  </p>
-                </div>
-              )}
-            </div>
+            {formData.is_custom_item && (
+              <div className="mt-2">
+                <Input
+                  id="custom_item_name"
+                  placeholder="Type custom item name..."
+                  value={formData.item_purchased}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      item_purchased: e.target.value,
+                    })
+                  }
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This will be saved as <strong>item_purchased</strong> without
+                  linking to a product.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -489,48 +563,28 @@ export function TransactionForm({
               />
             </div>
 
-            {/* Store Name -> Dropdown */}
+            {/* Payment Method -> Fixed options */}
             <div className="space-y-2">
-              <Label htmlFor="store_name">Store Name</Label>
+              <Label htmlFor="payment_method">Payment Method</Label>
               <Select
-                value={formData.store_name}
+                value={formData.payment_method}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, store_name: value })
+                  setFormData({ ...formData, payment_method: value })
                 }
                 disabled={isLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select store" />
+                  <SelectValue placeholder="Select payment method" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="HAPPIEST STORE">HAPPIEST STORE</SelectItem>
-                  <SelectItem value="BB STORE">BB STORE</SelectItem>
+                  <SelectItem value="BCA">BCA</SelectItem>
+                  <SelectItem value="GOPAY">GOPAY</SelectItem>
+                  <SelectItem value="QRIS">QRIS</SelectItem>
+                  <SelectItem value="DANA">DANA</SelectItem>
+                  <SelectItem value="SPAY">SPAY</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* Payment Method -> Fixed options */}
-          <div className="space-y-2">
-            <Label htmlFor="payment_method">Payment Method</Label>
-            <Select
-              value={formData.payment_method}
-              onValueChange={(value) =>
-                setFormData({ ...formData, payment_method: value })
-              }
-              disabled={isLoading}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select payment method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="BCA">BCA</SelectItem>
-                <SelectItem value="GOPAY">GOPAY</SelectItem>
-                <SelectItem value="QRIS">QRIS</SelectItem>
-                <SelectItem value="DANA">DANA</SelectItem>
-                <SelectItem value="SPAY">SPAY</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -542,7 +596,7 @@ export function TransactionForm({
                   setFormData((prev) => ({
                     ...prev,
                     purchase_price: toNum(price),
-                    revenue: computeRevenue(prev.selling_price, price), // ← hitung ulang saat purchase price berubah
+                    revenue: computeRevenue(prev.selling_price, price),
                   }))
                 }
                 placeholder="Enter purchase price"
@@ -558,7 +612,7 @@ export function TransactionForm({
                   setFormData((prev) => ({
                     ...prev,
                     selling_price: toNum(price),
-                    revenue: computeRevenue(price, prev.purchase_price), // ← hitung ulang saat selling price berubah
+                    revenue: computeRevenue(price, prev.purchase_price),
                   }))
                 }
                 placeholder={
@@ -576,10 +630,10 @@ export function TransactionForm({
                 value={computeRevenue(
                   formData.selling_price,
                   formData.purchase_price
-                )} // selalu sinkron
+                )}
                 onChange={() => {}}
                 placeholder="Calculated revenue"
-                disabled={true}
+                disabled
               />
             </div>
           </div>

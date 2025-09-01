@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useLanguage } from "@/components/language-provider";
-import { DashboardHeader } from "@/components/dashboard-header";
 import { ProductForm } from "@/components/product-form";
 import { ProductsTable } from "@/components/products-table";
 import { ProductBulkUpload } from "@/components/product-bulk-upload";
@@ -24,6 +23,7 @@ interface Product {
   name: string;
   type: string; // API value (lowercase like "sharing 8u")
   price: number;
+  store: string; // <-- NEW
   created_at?: string;
 }
 
@@ -45,12 +45,11 @@ const DISPLAY_TO_API: Record<string, string> = {
 };
 
 export default function ProductsPage() {
-  const { t, toggleLanguage, language } = useLanguage();
+  const { t } = useLanguage();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [activeTab, setActiveTab] = useState("manage");
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -76,7 +75,7 @@ export default function ProductsPage() {
         headers: { Accept: "application/json" },
       });
       const json = await res.json();
-      setProducts(json.products ?? []); // pakai key yang benar
+      setProducts(json.products ?? []);
       setTotal(json.total ?? 0);
     } catch (e) {
       console.error(e);
@@ -89,19 +88,20 @@ export default function ProductsPage() {
     fetchProducts();
   }, [page, pageSize, search, sortField, sortOrder]);
 
+  // now receives store in productData
   const handleSubmit = async (productData: Omit<Product, "id">) => {
     setIsSubmitting(true);
     try {
       const typeApi = (DISPLAY_TO_API[productData.type] ?? productData.type)
         .toString()
         .trim()
-        .toUpperCase(); // <-- samakan dengan ALLOWED_TYPES di server
+        .toUpperCase(); // match server ALLOWED_TYPES if any
 
       const payload = {
         name: productData.name?.trim(),
         type: typeApi,
         price: Number(productData.price),
-        // ❌ jangan kirim id di body untuk update
+        store: productData.store, // <-- include store
       };
 
       if (!payload.name || !payload.type || Number.isNaN(payload.price)) {
@@ -109,12 +109,15 @@ export default function ProductsPage() {
           "Name, type, and price are required; price must be a number"
         );
       }
+      if (!payload.store) {
+        throw new Error("Store is required");
+      }
       if (payload.price < 0) {
         throw new Error("Price must be >= 0");
       }
 
       const url = editingProduct
-        ? `/api/products/${encodeURIComponent(String(editingProduct.id))}` // <-- pastikan id string & aman
+        ? `/api/products/${encodeURIComponent(String(editingProduct.id))}`
         : "/api/products";
 
       const method = editingProduct ? "PUT" : "POST";
@@ -125,21 +128,18 @@ export default function ProductsPage() {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        credentials: "same-origin", // <-- pastikan cookie (sesi) ikut untuk RLS
+        credentials: "same-origin",
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        // tampilkan pesan error server biar jelas
         let msg = "";
         try {
           const body = await response.json();
           msg = body?.error || body?.message || "";
         } catch {}
-        if (response.status === 401)
-          msg ||= "Unauthorized. Please sign in again.";
-        if (response.status === 404)
-          msg ||= "Product not found or not authorized.";
+        if (response.status === 401) msg ||= "Unauthorized. Please sign in.";
+        if (response.status === 404) msg ||= "Product not found.";
         throw new Error(
           msg || `Failed to ${editingProduct ? "update" : "create"} product`
         );
@@ -178,11 +178,7 @@ export default function ProductsPage() {
       });
       if (!response.ok) throw new Error("Failed to delete product");
 
-      toast({
-        title: "Success",
-        description: "Product deleted successfully",
-      });
-
+      toast({ title: "Success", description: "Product deleted successfully" });
       await fetchProducts();
     } catch (error) {
       console.error("Error deleting product:", error);
@@ -199,19 +195,8 @@ export default function ProductsPage() {
     setShowForm(true);
   };
 
-  const handleCancel = () => {
-    setShowForm(false);
-    setEditingProduct(null);
-  };
-
-  const handleBulkUploadComplete = () => {
-    fetchProducts();
-    setActiveTab("manage");
-  };
-
   return (
     <div className="space-y-6">
-      {/* HEADER */}
       <div className="flex flex-col items-center rounded-2xl border border-white/20 bg-white/60 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5 lg:flex-row lg:justify-between">
         <div className="text-center lg:text-left">
           <h2 className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-2xl font-extrabold text-transparent">
@@ -230,7 +215,6 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* TABS */}
       <Tabs defaultValue="manage" className="space-y-4">
         <TabsList className="w-full justify-start overflow-x-auto no-scrollbar bg-white/70 backdrop-blur dark:bg-white/10">
           <TabsTrigger value="manage" className="shrink-0">
@@ -278,13 +262,16 @@ export default function ProductsPage() {
         <TabsContent value="bulk" className="space-y-4">
           <Card className="border-white/60 bg-white/70 backdrop-blur ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
             <CardContent className="p-4">
-              <ProductBulkUpload onUploadComplete={handleBulkUploadComplete} />
+              <ProductBulkUpload
+                onUploadComplete={() => {
+                  fetchProducts();
+                }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* TODO: Modal Add Product */}
       {showForm && (
         <Dialog open={showForm} onOpenChange={setShowForm}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
