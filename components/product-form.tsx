@@ -86,7 +86,7 @@ const DISPLAY_TO_API: Record<DisplayType, string> = Object.entries(
 }, {} as Record<DisplayType, string>);
 
 /** Store options */
-const STORE_OPTIONS = ["Happiest Store", "BB Store"] as const;
+const STORE_OPTIONS = ["HAPPIEST STORE", "BB STORE"] as const;
 
 export function ProductForm({
   product,

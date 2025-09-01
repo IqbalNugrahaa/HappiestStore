@@ -168,6 +168,16 @@ export function ProductsTable({
     );
   };
 
+  function formatDDMMMYYYY(iso?: string) {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "-";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mmm = d.toLocaleString("en-US", { month: "short" }).toUpperCase(); // SEP
+    const yyyy = d.getFullYear();
+    return `${dd} ${mmm} ${yyyy}`;
+  }
+
   return (
     <div className="space-y-3">
       {/* Search */}
@@ -222,9 +232,7 @@ export function ProductsTable({
                       </span>
                     </td>
                     <td className="px-3 py-3">
-                      {p.created_at
-                        ? new Date(p.created_at).toLocaleString("id-ID")
-                        : "-"}
+                      {formatDDMMMYYYY(p.created_at)}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-2">

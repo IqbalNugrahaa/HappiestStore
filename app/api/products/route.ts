@@ -122,31 +122,62 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const body = await req.json().catch(() => ({} as any));
+
   const name = String(body.name ?? "").trim();
   const type = String(body.type ?? "")
     .trim()
     .toLowerCase();
   const price = Number(body.price);
 
-  if (!name)
+  // Ambil store dari beberapa kemungkinan key
+  const rawStore = String(
+    body.store ?? body.store_name ?? body.storeName ?? ""
+  ).trim();
+
+  // (opsional) batasi ke nilai yang diizinkan
+  const ALLOWED_STORES = new Set(["HAPPIEST STORE", "BB STORE", "OTHER"]);
+
+  // Validasi dasar
+  if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
-  if (!API_TYPES.has(type))
+  }
+  if (!API_TYPES.has(type)) {
     return NextResponse.json({ error: "invalid type value" }, { status: 400 });
+  }
   if (!Number.isFinite(price) || price < 0) {
     return NextResponse.json(
       { error: "price must be a non-negative number" },
       { status: 400 }
     );
   }
+  if (!rawStore) {
+    return NextResponse.json({ error: "store is required" }, { status: 400 });
+  }
 
-  const insert = { name, type, price, created_at: new Date().toISOString() };
+  const store = rawStore.toUpperCase();
+  if (!ALLOWED_STORES.has(store)) {
+    return NextResponse.json({ error: "invalid store value" }, { status: 400 });
+  }
+
+  const nowIso = new Date().toISOString();
+  const insert = {
+    name,
+    type,
+    price,
+    store, // <-- penting: kolom NOT NULL
+    created_at: nowIso,
+    updated_at: nowIso,
+  };
+
   const { data, error } = await supabase
     .from("products")
     .insert(insert)
-    .select("id, name, type, price, created_at")
+    .select("id, name, type, price, store, created_at")
     .maybeSingle();
 
-  if (error)
+  if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
   return NextResponse.json({ ok: true, product: data }, { status: 201 });
 }

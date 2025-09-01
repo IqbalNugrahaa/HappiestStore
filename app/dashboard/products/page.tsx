@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import Swal from "sweetalert2";
 
 interface Product {
   id?: string;
@@ -95,31 +96,27 @@ export default function ProductsPage() {
       const typeApi = (DISPLAY_TO_API[productData.type] ?? productData.type)
         .toString()
         .trim()
-        .toUpperCase(); // match server ALLOWED_TYPES if any
+        .toUpperCase();
 
       const payload = {
         name: productData.name?.trim(),
         type: typeApi,
         price: Number(productData.price),
-        store: productData.store, // <-- include store
+        store: productData.store,
       };
 
+      // Validasi awal (tampilkan via Swal)
       if (!payload.name || !payload.type || Number.isNaN(payload.price)) {
         throw new Error(
           "Name, type, and price are required; price must be a number"
         );
       }
-      if (!payload.store) {
-        throw new Error("Store is required");
-      }
-      if (payload.price < 0) {
-        throw new Error("Price must be >= 0");
-      }
+      if (!payload.store) throw new Error("Store is required");
+      if (payload.price < 0) throw new Error("Price must be >= 0");
 
       const url = editingProduct
         ? `/api/products/${encodeURIComponent(String(editingProduct.id))}`
         : "/api/products";
-
       const method = editingProduct ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -145,11 +142,11 @@ export default function ProductsPage() {
         );
       }
 
-      toast({
+      await Swal.fire({
+        icon: "success",
         title: "Success",
-        description: `Product ${
-          editingProduct ? "updated" : "created"
-        } successfully`,
+        text: `Product ${editingProduct ? "updated" : "created"} successfully`,
+        confirmButtonText: "OK",
       });
 
       setShowForm(false);
@@ -157,11 +154,11 @@ export default function ProductsPage() {
       await fetchProducts();
     } catch (error) {
       console.error("Error saving product:", error);
-      toast({
+      await Swal.fire({
+        icon: "error",
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to save product",
-        variant: "destructive",
+        text: error instanceof Error ? error.message : "Failed to save product",
+        confirmButtonText: "Close",
       });
     } finally {
       setIsSubmitting(false);
@@ -169,23 +166,48 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return;
+    const { isConfirmed } = await Swal.fire({
+      title: "Delete product?",
+      text: "This action cannot be undone.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+    });
+
+    if (!isConfirmed) return;
 
     try {
       const response = await fetch(`/api/products/${id}`, {
         credentials: "same-origin",
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("Failed to delete product");
+      if (!response.ok) {
+        let msg = "";
+        try {
+          const body = await response.json();
+          msg = body?.error || body?.message || "";
+        } catch {}
+        throw new Error(msg || "Failed to delete product");
+      }
 
-      toast({ title: "Success", description: "Product deleted successfully" });
+      await Swal.fire({
+        icon: "success",
+        title: "Deleted",
+        text: "Product deleted successfully",
+        confirmButtonText: "OK",
+      });
+
       await fetchProducts();
     } catch (error) {
       console.error("Error deleting product:", error);
-      toast({
+      await Swal.fire({
+        icon: "error",
         title: "Error",
-        description: "Failed to delete product",
-        variant: "destructive",
+        text:
+          error instanceof Error ? error.message : "Failed to delete product",
+        confirmButtonText: "Close",
       });
     }
   };
