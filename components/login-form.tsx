@@ -113,12 +113,12 @@ export default function LoginForm() {
 
           <SubmitButton />
 
-          <div className="text-center text-sm text-muted-foreground">
+          {/* <div className="text-center text-sm text-muted-foreground">
             {t("dontHaveAccount")}{" "}
             <Link href="/auth/sign-up" className="text-primary hover:underline">
               {t("signUp")}
             </Link>
-          </div>
+          </div> */}
         </form>
       </CardContent>
     </Card>
