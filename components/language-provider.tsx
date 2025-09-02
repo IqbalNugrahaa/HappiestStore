@@ -103,6 +103,7 @@ const translations = {
     revenueToday: "Revenue Today",
     totalRevenueYesterday: "Total Revenue Yesterday",
     revenueYesterday: "Revenue Yesterday",
+    revenueMonth: "Revenue Month",
 
     // Forms
     email: "Email",
@@ -252,6 +253,7 @@ const translations = {
     revenueToday: "Pendapatan Hari Ini",
     totalRevenueYesterday: "Total Pendapatan Kemarin",
     revenueYesterday: "Pendapatan Kemarin",
+    revenueMonth: "Pendapatan Bulanan",
 
     // Forms
     email: "Email",

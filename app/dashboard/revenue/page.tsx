@@ -213,6 +213,9 @@ export default function RevenuePage() {
         throw new Error(msg);
       }
 
+      setShowForm(false);
+      setEditingTransaction(null);
+
       await Swal.fire({
         icon: "success",
         title: "Success",
@@ -221,10 +224,11 @@ export default function RevenuePage() {
         } successfully`,
         timer: 1600,
         showConfirmButton: false,
+        customClass: {
+          popup: "z-[9999]", // tailwind
+        },
       });
 
-      setShowForm(false);
-      setEditingTransaction(null);
       await Promise.all([fetchTransactions(), fetchRevenue()]);
     } catch (error) {
       console.error("Error saving transaction:", error);
@@ -273,6 +277,9 @@ export default function RevenuePage() {
         }`,
         timer: 1400,
         showConfirmButton: false,
+        customClass: {
+          popup: "z-[9999]", // tailwind
+        },
       });
 
       await Promise.all([fetchTransactions(), fetchRevenue()]);

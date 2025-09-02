@@ -141,16 +141,19 @@ export default function ProductsPage() {
           msg || `Failed to ${editingProduct ? "update" : "create"} product`
         );
       }
+      setShowForm(false);
+      setEditingProduct(null);
 
       await Swal.fire({
         icon: "success",
         title: "Success",
         text: `Product ${editingProduct ? "updated" : "created"} successfully`,
         confirmButtonText: "OK",
+        customClass: {
+          popup: "z-[9999]", // tailwind
+        },
       });
 
-      setShowForm(false);
-      setEditingProduct(null);
       await fetchProducts();
     } catch (error) {
       console.error("Error saving product:", error);
@@ -197,6 +200,9 @@ export default function ProductsPage() {
         title: "Deleted",
         text: "Product deleted successfully",
         confirmButtonText: "OK",
+        customClass: {
+          popup: "z-[9999]", // tailwind
+        },
       });
 
       await fetchProducts();

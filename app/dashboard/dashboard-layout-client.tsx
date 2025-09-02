@@ -19,14 +19,17 @@ function DashboardLayoutInner({
   const contentMl = collapsed ? "md:ml-28" : "md:ml-64";
 
   return (
-    <div className="flex h-screen">
-      <DashboardSidebar
-        user={user}
-        onLanguageToggle={toggleLanguage}
-        currentLanguage={language}
-        collapsed={collapsed}
-        onCollapsedChange={setCollapsed}
-      />
+    <div className="flex h-screen isolate">
+      {/* TURUNKAN LAYER SIDEBAR */}
+      <aside className="relative z-20">
+        <DashboardSidebar
+          user={user}
+          onLanguageToggle={toggleLanguage}
+          currentLanguage={language}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsed}
+        />
+      </aside>
 
       <div
         className={`
@@ -42,10 +45,24 @@ function DashboardLayoutInner({
           <div className="absolute -top-24 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-gradient-to-tr from-indigo-400/30 via-blue-400/20 to-purple-400/20 blur-3xl" />
         </div>
 
+        {/* Konten utama */}
         <main className="relative z-10 h-full overflow-auto p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>
+
+      {/* Elevasi portal dialog & swal supaya PASTI di atas sidebar */}
+      <style jsx global>{`
+        /* Radix/shadcn dialog portal container */
+        [data-radix-portal] {
+          z-index: 60 !important; /* di atas sidebar z-20 */
+          position: relative; /* pastikan stacking context */
+        }
+        /* Kalau pakai SweetAlert2 */
+        .swal2-container {
+          z-index: 70 !important; /* di atas dialog */
+        }
+      `}</style>
     </div>
   );
 }
