@@ -143,22 +143,24 @@ export function DashboardSidebar({
         {/* Header */}
         <div className="relative flex h-16 items-center px-3 md:px-4">
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-indigo-500/30 via-blue-500/30 to-purple-500/30" />
-          <Image
-            src={logo}
-            alt="Logo"
-            className="mr-2 rounded-2xl"
-            width={40}
-            height={40}
-            priority
-          />
-          <h1
-            className={cn(
-              "text-base font-semibold text-foreground transition-opacity",
-              isDesktop && collapsed ? "opacity-0 w-0" : "opacity-100"
-            )}
-          >
-            Happiest Store
-          </h1>
+          <Link href={"/dashboard"} className="flex items-center">
+            <Image
+              src={logo}
+              alt="Logo"
+              className="mr-2 rounded-2xl"
+              width={40}
+              height={40}
+              priority
+            />
+            <h1
+              className={cn(
+                "text-base font-semibold text-foreground transition-opacity",
+                isDesktop && collapsed ? "opacity-0 w-0" : "opacity-100"
+              )}
+            >
+              Happiest Store
+            </h1>
+          </Link>
           {/* Collapse toggle (desktop) */}
           <Button
             type="button"

@@ -79,7 +79,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <Link
-              href="/dashboard/revenue/month"
+              href="/dashboard/revenue-month"
               className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
             >
               View {t("revenueMonth")}

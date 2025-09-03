@@ -30,6 +30,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import { cn } from "@/lib/utils";
+// === Saldo: ikon opsional
+import { Landmark, Wallet, CreditCard } from "lucide-react";
 
 type YearRow = { year: number };
 type MonthRow = {
@@ -40,6 +42,14 @@ type MonthRow = {
   bca: number;
   dana: number;
   qris: number;
+  spay: number;
+};
+
+// === Saldo: tipe payload dari API
+type BalancesPayload = {
+  date: string;
+  bca: number;
+  dana: number;
   spay: number;
 };
 
@@ -79,6 +89,31 @@ export default function RevenueMonthView() {
   const [loading, setLoading] = useState(true);
   const isMobile = useMediaQuery("(max-width: 767px)");
   const currentMonth = new Date().getMonth() + 1; // 1..12
+
+  // === Saldo: state + fetch
+  const [balances, setBalances] = useState<BalancesPayload | null>(null);
+  const [loadingBalances, setLoadingBalances] = useState<boolean>(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoadingBalances(true);
+        const res = await fetch("/api/balances/today", { cache: "no-store" });
+        if (!alive) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json: BalancesPayload = await res.json();
+        setBalances(json);
+      } catch {
+        setBalances({ date: "", bca: 0, dana: 0, spay: 0 });
+      } finally {
+        if (alive) setLoadingBalances(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Load daftar tahun yang ada datanya
   useEffect(() => {
@@ -203,6 +238,60 @@ export default function RevenueMonthView() {
         </div>
       </div>
 
+      {/* === Saldo: 3 Card Sisa Saldo Terbaru === */}
+      <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
+        <Card className="border border-border/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <Landmark className="h-5 w-5" />
+              Saldo BCA
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {balances?.date ? `per ${balances.date}` : "—"}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl md:text-3xl font-semibold">
+              {loadingBalances ? "Memuat…" : formatRupiah(balances?.bca ?? 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <Wallet className="h-5 w-5" />
+              Saldo DANA
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {balances?.date ? `per ${balances.date}` : "—"}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl md:text-3xl font-semibold">
+              {loadingBalances ? "Memuat…" : formatRupiah(balances?.dana ?? 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <CreditCard className="h-5 w-5" />
+              Saldo SPAY
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {balances?.date ? `per ${balances.date}` : "—"}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl md:text-3xl font-semibold">
+              {loadingBalances ? "Memuat…" : formatRupiah(balances?.spay ?? 0)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Chart */}
       <Card className="overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-purple-500/10">
@@ -225,7 +314,7 @@ export default function RevenueMonthView() {
               <BarChart
                 data={chartBarsData}
                 margin={{ top: 8, right: 16, bottom: 8, left: 72 }}
-                barCategoryGap={isMobile ? "40%" : "20%"} // beri bar lebih gemuk saat single bar
+                barCategoryGap={isMobile ? "40%" : "20%"}
               >
                 <defs>
                   <linearGradient id="fillTotal" x1="0" y1="0" x2="0" y2="1">
@@ -290,7 +379,7 @@ export default function RevenueMonthView() {
               Memuat tabel…
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mx-4">
               <Table className="text-xs md:text-sm">
                 <TableHeader className="sticky top-0 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-10">
                   <TableRow>
