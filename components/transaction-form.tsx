@@ -425,9 +425,22 @@ export function TransactionForm({
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[360px]">
-                <Command>
-                  {/* Jika belum pilih store, nonaktifkan input search agar jelas alurnya */}
+              <PopoverContent
+                /* Selalu di bawah & jangan flip */
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                avoidCollisions={false}
+                /* Hindari autofocus yang bikin viewport “loncat” di iOS */
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                /* Lebar mengikuti trigger + list bisa di-scroll */
+                className="
+      z-[60] p-0
+      w-[var(--radix-popover-trigger-width)]
+      max-h-[60vh] overflow-y-auto overscroll-contain
+    "
+              >
+                <Command className="max-h-[inherit]">
                   <CommandInput
                     placeholder={
                       storeChosen
@@ -447,7 +460,6 @@ export function TransactionForm({
                   </CommandEmpty>
 
                   <CommandGroup>
-                    {/* Tampilkan produk hanya jika store sudah dipilih */}
                     {storeChosen &&
                       products.map((p) => {
                         const selected =
@@ -460,17 +472,16 @@ export function TransactionForm({
                             onSelect={() => {
                               setFormData((prev) => {
                                 const newSelling = toNum(p.price);
-                                const newRevenue = computeRevenue(
-                                  newSelling,
-                                  prev.purchase_price
-                                );
                                 return {
                                   ...prev,
                                   is_custom_item: false,
                                   id_product: p.id,
                                   item_purchased: p.name,
                                   selling_price: newSelling,
-                                  revenue: newRevenue,
+                                  revenue: computeRevenue(
+                                    newSelling,
+                                    prev.purchase_price
+                                  ),
                                 };
                               });
                               setProductOpen(false);
@@ -492,7 +503,6 @@ export function TransactionForm({
                         );
                       })}
 
-                    {/* Other (selalu ada walau store belum dipilih) */}
                     <CommandItem
                       key={OTHER_ID}
                       value="other custom manual"
