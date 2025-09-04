@@ -61,16 +61,9 @@ export default async function HomePage() {
               Happiest Store
             </span>
           </div>
-          <div className="hidden gap-2 sm:flex">
-            <Button asChild variant="ghost">
-              <Link href="/auth/login">Sign In</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/auth/sign-up">
-                Get Started <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+          <Button asChild variant="ghost">
+            <Link href="/auth/login">Sign In</Link>
+          </Button>
         </div>
       </header>
 
@@ -90,11 +83,6 @@ export default async function HomePage() {
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="w-full sm:w-auto">
-                <Link href="/auth/sign-up">
-                  Create account <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
               <Button
                 asChild
                 variant="outline"
@@ -111,7 +99,7 @@ export default async function HomePage() {
         <section className="container mx-auto px-4 pb-24">
           <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <Card className="group relative border-white/60 bg-white/70 shadow-sm ring-1 ring-black/5 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
-              <CardHeader className="text-center">
+              <CardHeader className="flex flex-col items-center text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 ring-1 ring-blue-200 dark:bg-sky-500/15 dark:ring-sky-400/20">
                   <Package className="h-7 w-7 text-blue-700 dark:text-sky-300" />
                 </div>
@@ -134,7 +122,7 @@ export default async function HomePage() {
             </Card>
 
             <Card className="group relative border-white/60 bg-white/70 shadow-sm ring-1 ring-black/5 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
-              <CardHeader className="text-center">
+              <CardHeader className="flex flex-col items-center text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-green-100 ring-1 ring-green-200 dark:bg-emerald-500/15 dark:ring-emerald-400/20">
                   <DollarSign className="h-7 w-7 text-green-700 dark:text-emerald-300" />
                 </div>
@@ -157,7 +145,7 @@ export default async function HomePage() {
             </Card>
 
             <Card className="group relative border-white/60 bg-white/70 shadow-sm ring-1 ring-black/5 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:ring-white/10">
-              <CardHeader className="text-center">
+              <CardHeader className="flex flex-col items-center text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-100 ring-1 ring-purple-200 dark:bg-fuchsia-500/15 dark:ring-fuchsia-400/20">
                   <BarChart3 className="h-7 w-7 text-purple-700 dark:text-fuchsia-300" />
                 </div>
@@ -185,10 +173,10 @@ export default async function HomePage() {
       {/* CTA bar untuk layar kecil (opsional) */}
       <div className="fixed inset-x-0 bottom-0 z-20 bg-white/80 p-3 shadow-lg backdrop-blur sm:hidden dark:bg-black/40">
         <div className="mx-auto flex max-w-md gap-2">
-          <Button asChild className="flex-1">
+          {/* <Button asChild className="flex-1">
             <Link href="/auth/sign-up">Sign Up</Link>
-          </Button>
-          <Button asChild variant="outline" className="flex-1">
+          </Button> */}
+          <Button asChild className="flex-1">
             <Link href="/auth/login">Sign In</Link>
           </Button>
         </div>
