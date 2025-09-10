@@ -9,7 +9,7 @@ export async function GET() {
     // Ambil saldo terbaru (closing_*). Cron 03:00 WIB akan mengisi hari berjalan.
     const { data, error } = await supabase
       .from("balances_daily")
-      .select("balance_date, closing_bca, closing_dana, closing_spay")
+      .select("balance_date, opening_bca, opening_dana, opening_spay")
       .order("balance_date", { ascending: false })
       .limit(1)
       .maybeSingle();
