@@ -292,8 +292,7 @@ export default function RevenueMonthView() {
         </Card>
       </div>
 
-      {/* Chart */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden hidden md:block">
         <CardHeader className="bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-purple-500/10">
           <CardTitle>
             {isMobile
@@ -301,6 +300,7 @@ export default function RevenueMonthView() {
               : `Grafik Pendapatan Bulanan (${year})`}
           </CardTitle>
         </CardHeader>
+
         <CardContent className={cn("pt-4", isMobile ? "h-56" : "h-64 md:h-80")}>
           {loading ? (
             <div className="text-sm text-muted-foreground">Memuat grafik…</div>

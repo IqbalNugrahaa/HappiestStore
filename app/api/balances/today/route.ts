@@ -26,9 +26,9 @@ export async function GET() {
 
     return NextResponse.json({
       date: data.balance_date,
-      bca: Number(data.closing_bca) || 0,
-      dana: Number(data.closing_dana) || 0,
-      spay: Number(data.closing_spay) || 0,
+      bca: Number(data.opening_bca) || 0,
+      dana: Number(data.opening_dana) || 0,
+      spay: Number(data.opening_spay) || 0,
     });
   } catch (e: any) {
     return NextResponse.json(
