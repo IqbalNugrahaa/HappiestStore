@@ -47,7 +47,6 @@ const DISPLAY_TO_API: Record<string, string> = {
 
 export default function ProductsPage() {
   const { t } = useLanguage();
-  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);

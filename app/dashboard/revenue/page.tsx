@@ -330,7 +330,6 @@ export default function RevenuePage() {
             className="border-indigo-200/60 hover:bg-indigo-50 dark:hover:bg-white/10"
             onClick={() => {
               setShowCSVUpload(true);
-              window.dispatchEvent(new Event("dash:collapse"));
             }}
           >
             <Upload className="mr-2 h-4 w-4" />
@@ -340,7 +339,6 @@ export default function RevenuePage() {
             className="bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 text-white hover:opacity-90"
             onClick={() => {
               setShowForm(true);
-              window.dispatchEvent(new Event("dash:collapse"));
               setEditingTransaction(null);
             }}
           >

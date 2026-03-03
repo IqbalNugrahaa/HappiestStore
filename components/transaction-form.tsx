@@ -349,12 +349,13 @@ export function TransactionForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            <div className="space-y-2 w-full">
               <Label htmlFor="date">Date</Label>
               <Input
                 id="date"
                 type="date"
+                className="w-full" // Memastikan input memenuhi kolom
                 value={formData.date}
                 onChange={(e) =>
                   setFormData({ ...formData, date: e.target.value })
@@ -363,8 +364,7 @@ export function TransactionForm({
               />
             </div>
 
-            {/* Store Name (Wajib pilih dahulu) */}
-            <div className="space-y-2">
+            <div className="space-y-2 w-full">
               <Label htmlFor="store_name">
                 Store Name <span className="text-red-500">*</span>
               </Label>
@@ -375,22 +375,22 @@ export function TransactionForm({
                 }
                 disabled={isLoading}
               >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder="Select store"
-                    aria-label="Select store first"
-                  />
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select store" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="HAPPIEST STORE">HAPPIEST STORE</SelectItem>
                   <SelectItem value="BB STORE">BB STORE</SelectItem>
                 </SelectContent>
               </Select>
+
               {!storeChosen && (
-                <p className="text-xs text-amber-600 flex items-center gap-1">
-                  <Store className="h-3.5 w-3.5" />
-                  Pilih store terlebih dahulu untuk menampilkan daftar item.
-                  Opsi “Other (custom)” tetap tersedia.
+                <p className="text-xs text-amber-600 flex items-start gap-1 mt-1">
+                  <Store className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                  <span>
+                    Pilih store terlebih dahulu untuk menampilkan daftar item.
+                    Opsi “Other (custom)” tetap tersedia.
+                  </span>
                 </p>
               )}
             </div>
