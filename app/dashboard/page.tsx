@@ -23,7 +23,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
         {/* Revenue Management */}
         <Card>
           <CardHeader>

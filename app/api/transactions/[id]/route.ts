@@ -12,9 +12,22 @@ function toDateOnlyISO(input: string) {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  // 1. PERBAIKAN TIPE PARAMS: Ubah menjadi Promise
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // 2. PERBAIKAN UTAMA: Wajib AWAIT params sebelum mengambil id-nya!
+    const resolvedParams = await params;
+    const rawId = resolvedParams.id;
+
+    // 3. VALIDASI MENGGUNAKAN rawId (BUKAN params.id lagi)
+    if (!rawId || rawId === "undefined" || rawId === "null") {
+      return NextResponse.json(
+        { error: "Invalid transaction ID" },
+        { status: 400 },
+      );
+    }
+
     const supabase = await createClient();
 
     // auth
@@ -29,10 +42,10 @@ export async function PUT(
     const body = await request.json();
 
     const {
-      id_product, // number | null
+      id_product,
       is_custom_item = false,
-      date, // string
-      item_purchase, // string
+      date,
+      item_purchase,
       customer_name = "",
       store_name = "",
       payment_method = "",
@@ -44,15 +57,23 @@ export async function PUT(
       year,
     } = body ?? {};
 
-    // Validasi tanggal → kirim "YYYY-MM-DD" agar aman utk kolom DATE
+    // BERSIHKAN id_product
+    let cleanIdProduct = id_product;
+    if (cleanIdProduct === "undefined" || cleanIdProduct === "") {
+      cleanIdProduct = null;
+    } else if (cleanIdProduct !== null && cleanIdProduct !== undefined) {
+      cleanIdProduct = Number(cleanIdProduct);
+    }
+
+    // Validasi tanggal
     if (!date) {
       return NextResponse.json({ error: "date is required" }, { status: 400 });
     }
-    const dateOnly = toDateOnlyISO(date);
+    const dateOnly = toDateOnlyISO(date); // Pastikan function ini sudah di-import
     if (!dateOnly) {
       return NextResponse.json(
         { error: "date must be a valid date" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -64,9 +85,9 @@ export async function PUT(
     // Validasi item/product
     if (!is_custom_item) {
       const hasId =
-        id_product !== undefined &&
-        id_product !== null &&
-        !Number.isNaN(Number(id_product));
+        cleanIdProduct !== undefined &&
+        cleanIdProduct !== null &&
+        !Number.isNaN(cleanIdProduct);
       const hasItem =
         typeof item_purchase === "string" && item_purchase.trim().length > 0;
       if (!hasId && !hasItem) {
@@ -75,14 +96,14 @@ export async function PUT(
             error:
               "Either id_product or item_purchase is required when is_custom_item = false",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
     } else {
       if (!item_purchase || !String(item_purchase).trim()) {
         return NextResponse.json(
           { error: "item_purchase is required when is_custom_item = true" },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -96,12 +117,12 @@ export async function PUT(
 
     let itemName = (rawItem ?? "").trim();
 
-    // (opsional) fallback ke nama produk jika ada id_product tapi itemName kosong
-    if (!itemName && id_product) {
+    // fallback ke nama produk
+    if (!itemName && cleanIdProduct) {
       const { data: prod } = await supabase
         .from("products")
         .select("name")
-        .eq("id", id_product)
+        .eq("id", cleanIdProduct)
         .maybeSingle();
       if (prod?.name) itemName = String(prod.name).trim();
     }
@@ -122,16 +143,14 @@ export async function PUT(
     if (Number.isNaN(pp) || Number.isNaN(sp) || Number.isNaN(rv)) {
       return NextResponse.json(
         { error: "purchase_price/selling_price/revenue must be numbers" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // === Susun patch ===
-    // HANYA set item_purchased jika kita punya nilai (hindari overwrite null/"")
     const patch: Record<string, any> = {
-      id_product: id_product ?? null, // pastikan nama kolom cocok dengan DB
-      // is_custom_item: !!is_custom_item, // aktifkan hanya jika kolom ini ADA di tabel
-      date: dateOnly, // YYYY-MM-DD
+      id_product: cleanIdProduct,
+      date: dateOnly,
       customer_name: customer_name?.trim() || null,
       store_name: store,
       payment_method: pay,
@@ -148,16 +167,11 @@ export async function PUT(
       patch.item_purchased = itemName;
     }
 
-    // Buat patch lebih bersih: hapus key null/undefined kalau tabel kamu punya constraint NOT NULL
-    // Object.keys(patch).forEach(k => patch[k] === undefined && delete patch[k]);
-
-    // Siapkan query dasar
     const base = supabase.from("transactions");
 
-    // Pastikan id cocok tipe (int vs uuid) dan tambahkan filter user_id
-    const rawId = params.id;
+    // 4. GUNAKAN rawId YANG SUDAH DI-AWAIT UNTUK UPDATE KE DATABASE
     const asNumber = Number(rawId);
-    const isNumericId = Number.isFinite(asNumber);
+    const isNumericId = !Number.isNaN(asNumber);
 
     const updQ = isNumericId
       ? base.update(patch).eq("id", asNumber).eq("user_id", user.id)
@@ -166,20 +180,19 @@ export async function PUT(
     const { data: transaction, error } = await updQ.select().single();
 
     if (error) {
-      // Kembalikan detail supabase supaya tahu akar masalah
       console.error("Supabase update error:", error);
       return NextResponse.json(
         {
           error: error.message || "Failed to update transaction",
           details: error,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
     if (!transaction) {
       return NextResponse.json(
         { error: "Transaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -188,14 +201,14 @@ export async function PUT(
     console.error("Unexpected error:", e);
     return NextResponse.json(
       { error: e?.message || "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   _req: NextRequest,
-  ctx: { params: { id: string } }
+  ctx: { params: { id: string } },
 ) {
   const supabase = await createClient();
 
@@ -229,13 +242,13 @@ export async function DELETE(
     console.error("Soft delete failed:", error);
     return NextResponse.json(
       { error: "Failed to delete transaction" },
-      { status: 500 }
+      { status: 500 },
     );
   }
   if (!data || data.length === 0) {
     return NextResponse.json(
       { error: "Not found or not allowed" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 

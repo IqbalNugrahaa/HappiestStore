@@ -75,6 +75,8 @@ export default function RevenuePage() {
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
+  console.log(`editingTransaction : ${editingTransaction?.id}`);
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
@@ -90,7 +92,7 @@ export default function RevenuePage() {
 
   // Get available years from transactions
   const availableYears = Array.from(
-    new Set(transactions.map((t) => t.year))
+    new Set(transactions.map((t) => t.year)),
   ).sort((a, b) => b - a);
 
   // Fetch transactions with filters (tetap seperti sebelumnya)
@@ -259,14 +261,14 @@ export default function RevenuePage() {
 
     try {
       const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-      const payload = await res.json().catch(() => ({} as any));
+      const payload = await res.json().catch(() => ({}) as any);
 
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to delete transaction");
       }
 
       setTransactions((prev) =>
-        prev.filter((tx) => String(tx.id) !== String(id))
+        prev.filter((tx) => String(tx.id) !== String(id)),
       );
 
       await Swal.fire({
