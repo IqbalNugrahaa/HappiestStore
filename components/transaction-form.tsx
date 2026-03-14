@@ -35,13 +35,13 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 
 interface Product {
   id: string;
   name: string;
   price: number;
-  /** optional: jika API mengembalikan informasi store */
   store_name?: string;
 }
 
@@ -84,10 +84,12 @@ const OTHER_ID = "__OTHER__";
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
+
 function todayDateOnly(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
+
 function dateOnlyFromAny(input?: string): string {
   const s = (input || "").trim();
   if (!s) return todayDateOnly();
@@ -97,13 +99,16 @@ function dateOnlyFromAny(input?: string): string {
   if (isNaN(d.getTime())) return todayDateOnly();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
+
 function ymFromDateOnly(dateOnly: string): { year: number; month: number } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
   if (m) return { year: Number(m[1]), month: Number(m[2]) };
   const d = new Date(dateOnly);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
+
 const toNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
 const computeRevenue = (selling: any, purchase: any) =>
   toNum(selling) - toNum(purchase);
 
@@ -145,6 +150,8 @@ export function TransactionForm({
     updated_at: transaction?.updated_at || new Date().toISOString(),
   });
 
+  const storeChosen = !!formData.store_name;
+
   const priceValid = formData.is_custom_item
     ? formData.selling_price >= 0
     : formData.selling_price > 0;
@@ -155,38 +162,36 @@ export function TransactionForm({
 
   const canSubmit = !isLoading && priceValid && hasItem;
 
-  // Debounce search
   useEffect(() => {
     const h = setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => clearTimeout(h);
   }, [search]);
 
-  // Fetch products (optionally filtered by store on the server)
   useEffect(() => {
     let mounted = true;
 
     async function fetchAllProducts(q: string, store?: string) {
       try {
         const cacheKey = `${q}__${store || ""}`;
+
         if (cacheRef.current.has(cacheKey)) {
           if (mounted) {
-            const cached = cacheRef.current.get(cacheKey) || [];
-            setAllProducts(cached);
+            setAllProducts(cacheRef.current.get(cacheKey) || []);
           }
           return;
         }
 
         setProductsLoading(true);
+
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
 
-        // coba hit endpoint fast path dengan filter store
         const qs = new URLSearchParams({ all: "1" });
         if (q) qs.set("search", q);
         if (store) qs.set("store", store);
-        const fastUrl = `/api/products?${qs.toString()}`;
 
+        const fastUrl = `/api/products?${qs.toString()}`;
         let res = await fetch(fastUrl, {
           signal: controller.signal,
           credentials: "same-origin",
@@ -194,28 +199,34 @@ export function TransactionForm({
         });
 
         let items: any[] = [];
+
         if (res.ok) {
           const json = await res.json();
           items = json?.products ?? [];
         } else {
-          // fallback pagination (tanpa filter server), nanti kita filter client-side
           items = [];
           const pageSize = 1000;
+
           for (let page = 1; ; page++) {
             if (!mounted) break;
+
             const url = q
               ? `/api/products?search=${encodeURIComponent(
-                  q
+                  q,
                 )}&page=${page}&pageSize=${pageSize}`
               : `/api/products?page=${page}&pageSize=${pageSize}`;
+
             res = await fetch(url, {
               signal: controller.signal,
               credentials: "same-origin",
               headers: { Accept: "application/json" },
             });
+
             if (!res.ok) break;
+
             const { products = [] } = await res.json();
             items.push(...products);
+
             if (products.length < pageSize) break;
           }
         }
@@ -224,12 +235,15 @@ export function TransactionForm({
           id: p.id,
           name: p.name,
           price: Number(p.price) || 0,
-          store_name: p.store_name, // jika tersedia
+          store_name: p.store_name,
         }));
 
-        cacheRef.current.set(`${q}__${store || ""}`, list);
-        if (mounted) setAllProducts(list);
-      } catch (_err) {
+        cacheRef.current.set(cacheKey, list);
+
+        if (mounted) {
+          setAllProducts(list);
+        }
+      } catch {
         if (mounted) setAllProducts([]);
       } finally {
         if (mounted) setProductsLoading(false);
@@ -237,26 +251,27 @@ export function TransactionForm({
     }
 
     fetchAllProducts(debouncedSearch, formData.store_name || undefined);
+
     return () => {
       mounted = false;
     };
   }, [debouncedSearch, formData.store_name]);
 
-  // Client-side filter by store if API belum mendukung filter store
   useEffect(() => {
     const store = formData.store_name?.trim();
+
     if (!store) {
-      // belum pilih store: kosongkan list agar memaksa pilih store dulu
       setProducts([]);
       return;
     }
+
     const filtered = allProducts.filter(
-      (p) => !p.store_name || p.store_name === store
+      (p) => !p.store_name || p.store_name === store,
     );
+
     setProducts(filtered);
   }, [allProducts, formData.store_name]);
 
-  // Keep month/year in sync with date
   useEffect(() => {
     const d = new Date(formData.date);
     if (!isNaN(d.getTime())) {
@@ -268,18 +283,35 @@ export function TransactionForm({
     }
   }, [formData.date]);
 
-  // Reset pilihan item saat store berganti (hindari mismatch)
+  const prevStoreRef = useRef(formData.store_name);
+
   useEffect(() => {
-    if (formData.id_product === null) {
+    if (prevStoreRef.current !== formData.store_name) {
+      setSearch("");
+      setDebouncedSearch("");
+      setProductOpen(false);
+
       setFormData((prev) => ({
         ...prev,
         id_product: null,
         item_purchased: "",
         is_custom_item: false,
-        // selling & revenue tidak diubah; user bisa isi manual/otomatis setelah pilih item
       }));
+
+      prevStoreRef.current = formData.store_name;
     }
   }, [formData.store_name]);
+
+  const selectedProduct =
+    !formData.is_custom_item && formData.id_product
+      ? (products.find((p) => p.id === formData.id_product) ?? null)
+      : null;
+
+  const filteredProducts = storeChosen
+    ? products.filter((p) =>
+        `${p.name} ${p.price}`.toLowerCase().includes(search.toLowerCase()),
+      )
+    : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -289,26 +321,28 @@ export function TransactionForm({
       if (
         !Number.isFinite(formData.selling_price) ||
         formData.selling_price < 0
-      )
+      ) {
         return;
+      }
     } else {
       if (!formData.id_product) return;
       if (
         !Number.isFinite(formData.selling_price) ||
         formData.selling_price <= 0
-      )
+      ) {
         return;
+      }
     }
 
     const finalRevenue = computeRevenue(
       formData.selling_price,
-      formData.purchase_price
+      formData.purchase_price,
     );
 
     const payload = {
       id_product: formData.is_custom_item
         ? undefined
-        : formData.id_product ?? undefined,
+        : (formData.id_product ?? undefined),
       is_custom_item: formData.is_custom_item,
       date: formData.date,
       item_purchase: formData.item_purchased.trim(),
@@ -328,13 +362,6 @@ export function TransactionForm({
     await onSubmit(payload as any);
   };
 
-  const selectedProduct =
-    !formData.is_custom_item && formData.id_product
-      ? products.find((p) => p.id === formData.id_product) ?? null
-      : null;
-
-  const storeChosen = !!formData.store_name;
-
   return (
     <Card>
       <CardHeader>
@@ -342,36 +369,37 @@ export function TransactionForm({
           {transaction ? "Edit Transaction" : t("addTransaction")}
         </CardTitle>
         <CardDescription>
-          {/* langkah: pilih store → pilih item */}
           Pilih <strong>Store</strong> terlebih dahulu, lalu pilih{" "}
           <strong>Item Purchase</strong>.
         </CardDescription>
       </CardHeader>
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            <div className="space-y-2 w-full">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+            <div className="w-full space-y-2">
               <Label htmlFor="date">Date</Label>
               <Input
                 id="date"
                 type="date"
-                className="w-full" // Memastikan input memenuhi kolom
+                className="w-full"
                 value={formData.date}
                 onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
+                  setFormData((prev) => ({ ...prev, date: e.target.value }))
                 }
                 disabled={isLoading}
               />
             </div>
 
-            <div className="space-y-2 w-full">
+            <div className="w-full space-y-2">
               <Label htmlFor="store_name">
                 Store Name <span className="text-red-500">*</span>
               </Label>
+
               <Select
                 value={formData.store_name}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, store_name: value })
+                  setFormData((prev) => ({ ...prev, store_name: value }))
                 }
                 disabled={isLoading}
               >
@@ -385,8 +413,8 @@ export function TransactionForm({
               </Select>
 
               {!storeChosen && (
-                <p className="text-xs text-amber-600 flex items-start gap-1 mt-1">
-                  <Store className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <p className="mt-1 flex items-start gap-1 text-xs text-amber-600">
+                  <Store className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
                   <span>
                     Pilih store terlebih dahulu untuk menampilkan daftar item.
                     Opsi “Other (custom)” tetap tersedia.
@@ -396,7 +424,6 @@ export function TransactionForm({
             </div>
           </div>
 
-          {/* Item Purchase */}
           <div className="space-y-2">
             <Label htmlFor="item_purchase">Item Purchase *</Label>
 
@@ -410,130 +437,151 @@ export function TransactionForm({
                   className="w-full justify-between overflow-hidden"
                   disabled={isLoading}
                 >
-                  <span className="truncate min-w-0 flex-1 text-left">
+                  <span className="min-w-0 flex-1 truncate text-left">
                     {formData.is_custom_item
                       ? formData.item_purchased || "Other (custom) — type item"
                       : selectedProduct
-                      ? `${selectedProduct.name} — ${formatIDR(
-                          selectedProduct.price
-                        )}`
-                      : storeChosen
-                      ? "Select product"
-                      : "Select store first or choose Other"}
+                        ? `${selectedProduct.name} — ${formatIDR(
+                            selectedProduct.price,
+                          )}`
+                        : storeChosen
+                          ? "Select product"
+                          : "Select store first or choose Other"}
                   </span>
+
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
 
               <PopoverContent
-                /* Selalu di bawah & jangan flip */
                 side="bottom"
                 align="start"
                 sideOffset={4}
                 avoidCollisions={false}
-                /* Hindari autofocus yang bikin viewport “loncat” di iOS */
                 onOpenAutoFocus={(e) => e.preventDefault()}
-                /* Lebar mengikuti trigger + list bisa di-scroll */
                 className="
-      z-[60] p-0
-      w-[var(--radix-popover-trigger-width)]
-      max-h-[60vh] overflow-y-auto overscroll-contain
-    "
+    z-[60]
+    w-[var(--radix-popover-trigger-width)]
+    p-0
+    overflow-hidden
+  "
               >
-                <Command className="max-h-[inherit]">
-                  <CommandInput
-                    placeholder={
-                      storeChosen
-                        ? "Search product..."
-                        : "Select store first..."
-                    }
-                    value={storeChosen ? search : ""}
-                    onValueChange={storeChosen ? setSearch : () => {}}
-                    disabled={!storeChosen}
-                  />
-                  <CommandEmpty>
-                    {productsLoading
-                      ? "Loading..."
-                      : storeChosen
-                      ? "No product found."
-                      : "Select store to see products."}
-                  </CommandEmpty>
+                <div className="flex max-h-[45dvh] flex-col">
+                  <Command
+                    shouldFilter={false}
+                    className="flex min-h-0 w-full flex-1 flex-col"
+                  >
+                    <div className="shrink-0 border-b">
+                      <CommandInput
+                        placeholder={
+                          storeChosen
+                            ? "Search product..."
+                            : "Select store first..."
+                        }
+                        value={storeChosen ? search : ""}
+                        onValueChange={storeChosen ? setSearch : () => {}}
+                        disabled={!storeChosen}
+                      />
+                    </div>
 
-                  <CommandGroup>
-                    {storeChosen &&
-                      products.map((p) => {
-                        const selected =
-                          !formData.is_custom_item &&
-                          p.id === formData.id_product;
-                        return (
-                          <CommandItem
-                            key={p.id}
-                            value={`${p.name} ${p.price}`}
-                            onSelect={() => {
-                              setFormData((prev) => {
-                                const newSelling = toNum(p.price);
-                                return {
-                                  ...prev,
-                                  is_custom_item: false,
-                                  id_product: p.id,
-                                  item_purchased: p.name,
-                                  selling_price: newSelling,
-                                  revenue: computeRevenue(
-                                    newSelling,
-                                    prev.purchase_price
-                                  ),
-                                };
-                              });
-                              setProductOpen(false);
-                            }}
-                            className="gap-2"
-                          >
-                            <div className="h-4 w-4 flex items-center justify-center shrink-0">
-                              {selected ? <Check className="h-4 w-4" /> : null}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-medium truncate">
-                                {p.name}
-                              </span>
-                              <span className="text-xs opacity-70 truncate">
-                                {formatIDR(p.price)}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        );
-                      })}
-
-                    <CommandItem
-                      key={OTHER_ID}
-                      value="other custom manual"
-                      onSelect={() => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          is_custom_item: true,
-                          id_product: null,
-                          item_purchased: prev.item_purchased || "",
-                          selling_price: toNum(prev.selling_price),
-                          revenue: computeRevenue(
-                            prev.selling_price,
-                            prev.purchase_price
-                          ),
-                        }));
-                        setProductOpen(false);
+                    <CommandList
+                      className="
+          min-h-0 flex-1 overflow-y-auto overscroll-contain
+          touch-pan-y
+        "
+                      style={{
+                        WebkitOverflowScrolling: "touch",
                       }}
-                      className="gap-2"
                     >
-                      <div className="h-4 w-4 shrink-0" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-medium truncate">
-                          Other (custom)
-                        </span>
-                        <span className="text-xs opacity-70 truncate">
-                          Type item name & price manually
-                        </span>
-                      </div>
-                    </CommandItem>
-                  </CommandGroup>
-                </Command>
+                      <CommandEmpty>
+                        {productsLoading
+                          ? "Loading..."
+                          : storeChosen
+                            ? "No product found."
+                            : "Select store to see products."}
+                      </CommandEmpty>
+
+                      <CommandGroup>
+                        {storeChosen &&
+                          filteredProducts.map((p) => {
+                            const selected =
+                              !formData.is_custom_item &&
+                              p.id === formData.id_product;
+
+                            return (
+                              <CommandItem
+                                key={p.id}
+                                value={`${p.name} ${p.price}`}
+                                onSelect={() => {
+                                  setFormData((prev) => {
+                                    const newSelling = toNum(p.price);
+                                    return {
+                                      ...prev,
+                                      is_custom_item: false,
+                                      id_product: p.id,
+                                      item_purchased: p.name,
+                                      selling_price: newSelling,
+                                      revenue: computeRevenue(
+                                        newSelling,
+                                        prev.purchase_price,
+                                      ),
+                                    };
+                                  });
+                                  setProductOpen(false);
+                                }}
+                                className="gap-2"
+                              >
+                                <div className="flex h-4 w-4 shrink-0 items-center justify-center">
+                                  {selected ? (
+                                    <Check className="h-4 w-4" />
+                                  ) : null}
+                                </div>
+
+                                <div className="flex min-w-0 flex-col">
+                                  <span className="truncate font-medium">
+                                    {p.name}
+                                  </span>
+                                  <span className="truncate text-xs opacity-70">
+                                    {formatIDR(p.price)}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+
+                        <CommandItem
+                          key={OTHER_ID}
+                          value="other custom manual"
+                          onSelect={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              is_custom_item: true,
+                              id_product: null,
+                              item_purchased: prev.item_purchased || "",
+                              selling_price: toNum(prev.selling_price),
+                              revenue: computeRevenue(
+                                prev.selling_price,
+                                prev.purchase_price,
+                              ),
+                            }));
+                            setProductOpen(false);
+                          }}
+                          className="gap-2"
+                        >
+                          <div className="h-4 w-4 shrink-0" />
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate font-medium">
+                              Other (custom)
+                            </span>
+                            <span className="truncate text-xs opacity-70">
+                              Type item name & price manually
+                            </span>
+                          </div>
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </div>
               </PopoverContent>
             </Popover>
 
@@ -544,14 +592,14 @@ export function TransactionForm({
                   placeholder="Type custom item name..."
                   value={formData.item_purchased}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
+                    setFormData((prev) => ({
+                      ...prev,
                       item_purchased: e.target.value,
-                    })
+                    }))
                   }
                   disabled={isLoading}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   This will be saved as <strong>item_purchased</strong> without
                   linking to a product.
                 </p>
@@ -559,27 +607,29 @@ export function TransactionForm({
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="customer_name">Customer Name</Label>
               <Input
                 id="customer_name"
                 value={formData.customer_name}
                 onChange={(e) =>
-                  setFormData({ ...formData, customer_name: e.target.value })
+                  setFormData((prev) => ({
+                    ...prev,
+                    customer_name: e.target.value,
+                  }))
                 }
                 placeholder="Enter customer name"
                 disabled={isLoading}
               />
             </div>
 
-            {/* Payment Method -> Fixed options */}
             <div className="space-y-2">
               <Label htmlFor="payment_method">Payment Method</Label>
               <Select
                 value={formData.payment_method}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, payment_method: value })
+                  setFormData((prev) => ({ ...prev, payment_method: value }))
                 }
                 disabled={isLoading}
               >
@@ -597,7 +647,7 @@ export function TransactionForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="purchase_price">Purchase Price</Label>
               <CurrencyInput
@@ -639,7 +689,7 @@ export function TransactionForm({
               <CurrencyInput
                 value={computeRevenue(
                   formData.selling_price,
-                  formData.purchase_price
+                  formData.purchase_price,
                 )}
                 onChange={() => {}}
                 placeholder="Calculated revenue"
@@ -654,7 +704,7 @@ export function TransactionForm({
               id="notes"
               value={formData.notes}
               onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
+                setFormData((prev) => ({ ...prev, notes: e.target.value }))
               }
               placeholder="Enter any additional notes"
               disabled={isLoading}
@@ -666,6 +716,7 @@ export function TransactionForm({
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("save")}
             </Button>
+
             <Button
               type="button"
               variant="outline"
