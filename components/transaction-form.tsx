@@ -462,11 +462,11 @@ export function TransactionForm({
                 className="
     z-[60]
     w-[var(--radix-popover-trigger-width)]
-    p-0
     overflow-hidden
+    p-0
   "
               >
-                <div className="flex max-h-[45dvh] flex-col">
+                <div className="flex max-h-[45dvh] min-h-0 flex-col">
                   <Command
                     shouldFilter={false}
                     className="flex min-h-0 w-full flex-1 flex-col"
@@ -486,11 +486,19 @@ export function TransactionForm({
 
                     <CommandList
                       className="
-          min-h-0 flex-1 overflow-y-auto overscroll-contain
-          touch-pan-y
+          min-h-0 flex-1 overflow-y-auto overflow-x-hidden
+          overscroll-contain touch-pan-y
         "
                       style={{
                         WebkitOverflowScrolling: "touch",
+                        touchAction: "pan-y",
+                        overscrollBehavior: "contain",
+                      }}
+                      onWheelCapture={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onTouchMoveCapture={(e) => {
+                        e.stopPropagation();
                       }}
                     >
                       <CommandEmpty>
