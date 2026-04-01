@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   const supabase = await createClient();
   const id = Number(params?.id);
@@ -25,14 +25,20 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  // 1. Ubah tipe params menjadi Promise
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createClient();
-  const id = String(params?.id || "").trim(); // <-- JANGAN Number()
+  // 2. WAJIB AWAIT params sebelum mengambil nilainya
+  const resolvedParams = await params;
 
-  if (!id) {
+  const id = String(resolvedParams.id || "").trim(); // <-- JANGAN Number()
+
+  // Tambahkan pencegahan string "undefined" bawaan sistem
+  if (!id || id === "undefined" || id === "null") {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+
+  const supabase = await createClient();
 
   // Pastikan user terautentikasi (agar RLS bekerja)
   const {
@@ -43,7 +49,7 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({} as any));
+  const body = await req.json().catch(() => ({}) as any);
   const patch: Record<string, any> = {};
 
   if (typeof body.name === "string") {
@@ -61,7 +67,7 @@ export async function PUT(
     if (Number.isNaN(p)) {
       return NextResponse.json(
         { error: "price must be a number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     patch.price = p;
@@ -76,7 +82,7 @@ export async function PUT(
   const { data, error } = await supabase
     .from("products")
     .update(patch)
-    .eq("id", id)
+    .eq("id", id) // Karena sudah di-await, nilai ini sekarang murni "224"
     .eq("user_id", user.id) // <-- bantu “jelas” untuk RLS
     .is("deleted_at", null)
     .select("id, name, type, price, updated_at")
@@ -89,7 +95,7 @@ export async function PUT(
     // tidak ketemu utk user ini (atau diblokir RLS)
     return NextResponse.json(
       { error: "Not found or not authorized" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
@@ -97,13 +103,17 @@ export async function PUT(
 }
 
 // PATCH -> delegasi ke PUT agar method apapun yang dikirim client tetap diterima
-export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }, // <-- Ubah tipe params jadi Promise
+) {
+  // Langsung teruskan ke PUT, karena PUT sudah melakukan 'await ctx.params'
   return PUT(req, ctx);
 }
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   const supabase = await createClient();
   const id = String(params?.id || "").trim();
@@ -134,7 +144,7 @@ export async function DELETE(
   if (!data)
     return NextResponse.json(
       { error: "Not found or not authorized" },
-      { status: 404 }
+      { status: 404 },
     );
 
   return NextResponse.json({ ok: true, id });
