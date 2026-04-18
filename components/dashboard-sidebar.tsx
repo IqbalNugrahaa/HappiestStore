@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
+  BadgeDollarSignIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,6 +23,11 @@ import { useEffect, useState } from "react";
 
 const navigation = [
   { name: "Revenue", href: "/dashboard/revenue", icon: BarChart3 },
+  {
+    name: "Spendings",
+    href: "/dashboard/spendings",
+    icon: BadgeDollarSignIcon,
+  },
   { name: "Products", href: "/dashboard/products", icon: Package },
   { name: "Revenue Month", href: "/dashboard/revenue-month", icon: TrendingUp },
 ];
@@ -88,7 +94,7 @@ export function DashboardSidebar({
     return () => {
       window.removeEventListener(
         "dash:collapse",
-        handleCollapse as EventListener
+        handleCollapse as EventListener,
       );
       window.removeEventListener("dash:expand", handleExpand as EventListener);
     };
@@ -137,7 +143,7 @@ export function DashboardSidebar({
           mobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
           // desktop state
           "md:translate-x-0",
-          desktopWidth
+          desktopWidth,
         )}
       >
         {/* Header */}
@@ -154,7 +160,7 @@ export function DashboardSidebar({
           <h1
             className={cn(
               "text-base font-semibold text-foreground transition-opacity",
-              isDesktop && collapsed ? "opacity-0 w-0" : "opacity-100"
+              isDesktop && collapsed ? "opacity-0 w-0" : "opacity-100",
             )}
           >
             Happiest Store
@@ -195,7 +201,7 @@ export function DashboardSidebar({
                       ? "justify-center px-0"
                       : "justify-start",
                     isActive &&
-                      "bg-white/70 text-foreground ring-1 ring-indigo-500/30 dark:bg-white/10 dark:ring-indigo-400/30"
+                      "bg-white/70 text-foreground ring-1 ring-indigo-500/30 dark:bg-white/10 dark:ring-indigo-400/30",
                   )}
                 >
                   <Link
@@ -210,7 +216,7 @@ export function DashboardSidebar({
                         "h-4 w-4 shrink-0",
                         isActive
                           ? "text-indigo-600 dark:text-indigo-300"
-                          : "text-muted-foreground"
+                          : "text-muted-foreground",
                       )}
                       aria-hidden="true"
                     />
@@ -227,7 +233,7 @@ export function DashboardSidebar({
           <div
             className={cn(
               "flex items-center gap-3",
-              isDesktop && collapsed ? "justify-center" : "px-1"
+              isDesktop && collapsed ? "justify-center" : "px-1",
             )}
           >
             <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white ring-1 ring-white/60 dark:ring-white/10">
@@ -247,7 +253,7 @@ export function DashboardSidebar({
           <div
             className={cn(
               "flex gap-2",
-              isDesktop && collapsed && "justify-center"
+              isDesktop && collapsed && "justify-center",
             )}
           >
             <Button
@@ -256,7 +262,7 @@ export function DashboardSidebar({
               onClick={onLanguageToggle}
               className={cn(
                 "text-foreground hover:bg-white/60 dark:hover:bg-white/10",
-                isDesktop && collapsed ? "h-9 w-9" : "flex-1"
+                isDesktop && collapsed ? "h-9 w-9" : "flex-1",
               )}
               title="Toggle language"
             >
@@ -274,7 +280,7 @@ export function DashboardSidebar({
                 size={isDesktop && collapsed ? "icon" : "sm"}
                 className={cn(
                   "w-full text-foreground hover:bg-white/60 dark:hover:bg-white/10",
-                  isDesktop && collapsed ? "h-9 w-9" : ""
+                  isDesktop && collapsed ? "h-9 w-9" : "",
                 )}
                 title="Sign Out"
               >

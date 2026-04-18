@@ -113,12 +113,17 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  // 1. Ubah tipe params menjadi Promise
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
-  const id = String(params?.id || "").trim();
 
-  if (!id) {
+  // 2. WAJIB AWAIT params sebelum diekstrak
+  const resolvedParams = await params;
+  const id = String(resolvedParams?.id || "").trim();
+
+  // 3. Tambahkan validasi pencegahan string "undefined" bawaan JavaScript
+  if (!id || id === "undefined" || id === "null") {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 

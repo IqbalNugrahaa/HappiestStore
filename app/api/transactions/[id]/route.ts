@@ -208,7 +208,8 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  ctx: { params: { id: string } },
+  // 1. UBAH TIPE PARAMS MENJADI PROMISE
+  ctx: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
 
@@ -219,9 +220,17 @@ export async function DELETE(
   if (authErr || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rawId = ctx.params.id;
+  // 2. WAJIB AWAIT PARAMS SEBELUM MENGAMBIL ID
+  const resolvedParams = await ctx.params;
+  const rawId = resolvedParams.id;
+
+  // 3. VALIDASI KEAMANAN (Mencegah string "undefined" atau "null")
+  if (!rawId || rawId === "undefined" || rawId === "null") {
+    return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+  }
+
   const asNumber = Number(rawId);
-  const isNumericId = Number.isFinite(asNumber);
+  const isNumericId = !Number.isNaN(asNumber); // Gunakan isNaN agar lebih konsisten dengan kodemu yang lain
 
   const base = supabase.from("transactions");
   const updQ = isNumericId
@@ -245,6 +254,7 @@ export async function DELETE(
       { status: 500 },
     );
   }
+
   if (!data || data.length === 0) {
     return NextResponse.json(
       { error: "Not found or not allowed" },
